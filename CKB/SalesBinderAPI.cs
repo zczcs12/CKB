@@ -4,11 +4,14 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Threading;
 using System.Web.Hosting;
+using DocumentFormat.OpenXml.Drawing;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Path = System.IO.Path;
 
 namespace CKB
 {
@@ -24,6 +27,7 @@ namespace CKB
         private static string InvoicesFilePath = $@"{SAVE_PATH_ROOT}\invoices.json";
         private static string SettingsFilePath = $@"{SAVE_PATH_ROOT}\settings.json";
         private static string LocationsFilePath = $@"{SAVE_PATH_ROOT}\locations.json";
+        private static string UnitsOfMeasureFilePath = $@"{SAVE_PATH_ROOT}\units_of_measure.json";
 
         #region Inventory
         private static readonly Lazy<SalesBinderInventoryItem[]> _inventory = new Lazy<SalesBinderInventoryItem[]>(() =>
@@ -42,18 +46,10 @@ namespace CKB
                     .ToDictionary(x => x.Key, x => x.OrderByDescending(b=>b.Quantity).First())
             );
 
-        private static readonly Lazy<Dictionary<string, string>> _inventoryUnitsOfMeasure =
-            new Lazy<Dictionary<string, string>>(() =>
-                Inventory.Where(x => !string.IsNullOrEmpty(x.BinLocation) && !string.IsNullOrEmpty(x.BinLocationId))
-                    .GroupBy(x => x.BinLocation)
-                    .ToDictionary(x => x.Key, x => x.First().BinLocationId)
-            );
-
         public static SalesBinderInventoryItem[] Inventory => _inventory.Value;
         public static IDictionary<string, SalesBinderInventoryItem> InventoryById => _inventoryById.Value;
         public static IDictionary<string, SalesBinderInventoryItem> InventoryByBarcode => _inventoryByBarcode.Value;
 
-        public static IDictionary<string, string> UnitsOfMeasure => _inventoryUnitsOfMeasure.Value;
         
         
         #endregion
@@ -95,6 +91,27 @@ namespace CKB
         public static SalesBinderInvoice[] Invoices => _invoices.Value;
         
         #endregion
+        
+        #region Units of Measure
+
+        private static readonly Lazy<SalesBinderUnitOfMeasure[]> _unitsOfMeasure = new Lazy<SalesBinderUnitOfMeasure[]>(
+            () =>
+            {
+                var s = JToken.Parse(File.ReadAllText(UnitsOfMeasureFilePath));
+                var arr = s?.ExtractArray("data");
+                return arr == null ? null : arr.Select(SalesBinderUnitOfMeasure.Parse).ToArray();
+            });
+
+        public static SalesBinderUnitOfMeasure[] UnitsOfMeasure => _unitsOfMeasure.Value;
+
+        private static readonly Lazy<Dictionary<string, SalesBinderUnitOfMeasure>> _unitsOfMeasureByName =
+            new Lazy<Dictionary<string, SalesBinderUnitOfMeasure>>(
+                () => UnitsOfMeasure.ToDictionary(x => x.ShortName, x => x)
+            );
+
+        public static IDictionary<string, SalesBinderUnitOfMeasure> UnitsOfMeasureByName => _unitsOfMeasureByName.Value;
+        
+        #endregion
 
         private static readonly Lazy<HttpClient> _client = new Lazy<HttpClient>(() =>
         {
@@ -105,6 +122,9 @@ namespace CKB
             client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
             return client;
         });
+
+        private static Lazy<WebClient> _webClient = new Lazy<WebClient>(() => new WebClient());
+
 
         public static void RetrieveAndSaveInventory()
             => retrieveAndSave(RetrieveInventory, InventoryFilePath);
@@ -213,7 +233,6 @@ namespace CKB
         }
 
 
-        private static Lazy<WebClient> _webClient = new Lazy<WebClient>(() => new WebClient());
 
         private static DateTime _lastRequestTime;
         private static void blockIfNecessary()
@@ -243,7 +262,7 @@ namespace CKB
             return response;
         }
 
-        private static string postJson(string urlEnding_, string json_)
+        private static string putJson(string urlEnding_, string json_)
         {
             blockIfNecessary();
             var httpContent = new StringContent(json_, Encoding.UTF8, "application/json");
@@ -252,6 +271,22 @@ namespace CKB
             _lastRequestTime=DateTime.Now;
             return response?.Content.ReadAsStringAsync().Result;
         }
+
+        private static string postImage(string urlEnding_, string filePath_)
+        {
+            blockIfNecessary();
+            var uri = new Uri($"{URI_ROOT}{urlEnding_}");
+
+            var request = new HttpRequestMessage(HttpMethod.Post, uri);
+            request.Content = new ByteArrayContent(File.ReadAllBytes(filePath_));
+            request.Content.Headers.ContentType=MediaTypeHeaderValue.Parse("image/jpeg");
+
+            var response = _client.Value.SendAsync(request).Result;
+            _lastRequestTime=DateTime.Now;
+            
+            return response?.Content.ReadAsStringAsync().Result;
+        }
+        
         
         public static void UpdateQuantity(string identifier_, long newQuantity_)
         {
@@ -267,9 +302,32 @@ namespace CKB
             var json = "{ \"item\": { \"quantity\" : <qty> } }"
                 .Replace("<qty>", $"{newQuantity_}");
 
-            var response = postJson(urlEnding, json);
+            var response = putJson(urlEnding, json);
 
-            Console.WriteLine(response);
+            response.ConsoleWriteLine();
+        }
+
+        public static void UploadImage(string identifier_, string imagePath_)
+        {
+            if (!_inventoryByBarcode.Value.TryGetValue(identifier_, out var record))
+            {
+                $"Don't know of an inventory item with barcode {identifier_} so can't update it."
+                    .ConsoleWriteLine();
+                return;
+            }
+
+            if (!File.Exists(imagePath_))
+            {
+                $"The image path '{imagePath_}' does not exist"
+                    .ConsoleWriteLine();
+                return;
+            }
+
+            var urlEnding = $"images/upload/{record.Id}.json";
+
+            var response = postImage(urlEnding, imagePath_);
+            
+            response.ConsoleWriteLine();
         }
     }
 
@@ -485,4 +543,20 @@ namespace CKB
         public int Quantity { get; set; }
         public string Id { get; set; }
     }
+
+    public class SalesBinderUnitOfMeasure
+    {
+        public static SalesBinderUnitOfMeasure Parse(JToken token_)
+            => new SalesBinderUnitOfMeasure
+            {
+                Id = token_.ExtractString("id"),
+                ShortName = token_.ExtractString("short_name"),
+                LongName = token_.ExtractString("full_name")
+            };
+        
+        public string Id { get; set; }
+        public string ShortName { get; set; }
+        public string LongName { get; set; }
+    }
+    
 }

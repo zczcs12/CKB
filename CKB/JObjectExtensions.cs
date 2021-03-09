@@ -33,6 +33,46 @@ namespace CKB
             return parseResult.Item1;
         }
 
+        public static bool TryExtractToken(this JToken t_, string tag_, out JToken t)
+        {
+            try
+            {
+                t = t_?[tag_];
+            }
+            catch
+            {
+                t = null;
+            }
+
+            return t != null;
+        }
+
+        public static JToken ExtractToken(this JToken t_, string tag_)
+        {
+            t_.TryExtractToken(tag_, out var ret);
+            return ret;
+        }
+
+        public static bool TryExtractArray(this JToken t_, string tag_, out JArray t)
+        {
+            try
+            {
+                t=t_[tag_] as JArray;
+            }
+            catch
+            {
+                t = null;
+            }
+
+            return t != null;
+        }
+
+        public static JArray ExtractArray(this JToken t_, string tag_)
+        {
+            t_.TryExtractArray(tag_, out var t);
+            return t;
+        }
+        
         public static bool TryExtractLong(this JToken t_, string tag_, out long out_)
             => t_.TryExtract(tag_, j =>
             {

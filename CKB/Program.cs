@@ -423,8 +423,21 @@ namespace CKB
                 // SalesBinderAPI.UpdateQuantity("9781786484734", 1);
                 // SalesBinderAPI.UnitsOfMeasure.ForEach(x=>$"{x.Key} = {x.Value}".ConsoleWriteLine());
 
-                SalesBinderAPI.Inventory.Where(x => x.BarCode.Length == 13 && x.Quantity > 0)
-                    .ForEach(x=>BlackwellsAPI.TryGetImageForIdentifier(x.BarCode));
+                // SalesBinderAPI.Inventory.Where(x => x.BarCode.Length == 13 && x.Quantity > 0)
+                //     .ForEach(x=>BlackwellsAPI.TryGetImageForIdentifier(x.BarCode));
+
+                // SalesBinderAPI.UnitsOfMeasure.ForEach(x => $"{x.Id} => {x.ShortName}".ConsoleWriteLine());
+                
+                // SalesBinderAPI.Inventory.Where(x=>x.HasImageSaved()==false && x.Quantity>0)
+                //     .ForEach(x=>
+                //     {
+                //         var image = ExtensionMethods.FindImagePath(x.BarCode);
+                //         
+                //         $"{x.BarCode} @ {image}".ConsoleWriteLine();
+                //
+                //         if("9780007968671".Equals(x.BarCode))
+                //             SalesBinderAPI.UploadImage(x.BarCode,image);
+                //     });
             }
         }
     }

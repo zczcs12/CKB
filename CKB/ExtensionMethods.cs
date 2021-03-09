@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Threading.Tasks;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
@@ -32,6 +34,10 @@ namespace CKB
             }
         }
 
+        public static bool HasImageSaved(this SalesBinderInventoryItem inventoryItem)
+            => Enum.GetValues(typeof(ImageSize)).Cast<ImageSize>().Select(iss => inventoryItem.ImageFilePath(iss))
+                .Any(File.Exists);
+        
         public static void ConsoleWriteLine(this string str_) => Console.WriteLine(str_);
 
         public static string Join(this string[] items_, string sep_) => string.Join(sep_, items_);
