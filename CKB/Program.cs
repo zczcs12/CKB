@@ -47,8 +47,11 @@ namespace CKB
         [Argument('x',"sbld","Sales Binder Locations Download")]
         private static bool SalesBinderLocationsDownload { get; set; }
         
-        [Argument('y',"sbuqf","Sales Binder Update Quantities from csv file")]
+        [Argument('y',"sbqfu","Sales Binder Quantities from csv file Upload")]
         private static bool SalesBinderUpdateQuantitiesFromFile { get; set; }
+        
+        [Argument('u', "sbimu","Sales Binder Image Upload (for inventory without one)")]
+        private static bool SalesBinderFindAndUploadImagesForInventoryWithoutAnImage { get; set; }
 
         [Argument('j',"kle","Keepa lookup ensure. Lookup given IDs in local keepa records. Try to update any missing.")]
         private static bool KeepaLookupEnsure { get; set; }
@@ -365,7 +368,7 @@ namespace CKB
 
             if (SalesBinderUpdateQuantitiesFromFile)
             {
-                if (!lookup.ArgumentDictionary.TryGetValue("sbuqf", out var arg) || arg==null || string.IsNullOrEmpty(arg.ToString()))
+                if (!lookup.ArgumentDictionary.TryGetValue("sbqfu", out var arg) || arg==null || string.IsNullOrEmpty(arg.ToString()))
                     "You need to supply a csv argument of the identifiers you want to lookup".ConsoleWriteLine();
                 else if (!File.Exists(arg.ToString()))
                     $"File '{arg.ToString()}' does not exist.".ConsoleWriteLine();
@@ -373,7 +376,7 @@ namespace CKB
                 {
                     var inventoryByBarCode = SalesBinderAPI.InventoryByBarcode;
 
-                    var contents = File.ReadAllLines(args.ToString())
+                    var contents = File.ReadAllLines(arg.ToString())
                         .Select(x => x.Split(','))
                         .Select(x =>
                         {
@@ -412,6 +415,20 @@ namespace CKB
                 }
             }
 
+            if (SalesBinderFindAndUploadImagesForInventoryWithoutAnImage)
+            {
+                SalesBinderAPI.Inventory.Where(x=>x.HasImageSaved()==false && x.Quantity>0)
+                    .Select(x=>(Item:x,Image:ExtensionMethods.FindImagePath(x.BarCode)))
+                    .ForEach(x=>
+                    {
+                        $"{x.Item.BarCode} : found image : {x.Image}".ConsoleWriteLine();
+                
+                        if(!string.IsNullOrEmpty(x.Image))
+                            SalesBinderAPI.UploadImage(x.Item.BarCode,x.Image);
+                    });
+                
+            }
+
             if (Test)
             {
                 // SalesBinderAPI.Inventory.GroupBy(x=>x.BarCode)
@@ -428,16 +445,16 @@ namespace CKB
 
                 // SalesBinderAPI.UnitsOfMeasure.ForEach(x => $"{x.Id} => {x.ShortName}".ConsoleWriteLine());
                 
-                // SalesBinderAPI.Inventory.Where(x=>x.HasImageSaved()==false && x.Quantity>0)
-                //     .ForEach(x=>
-                //     {
-                //         var image = ExtensionMethods.FindImagePath(x.BarCode);
-                //         
-                //         $"{x.BarCode} @ {image}".ConsoleWriteLine();
-                //
-                //         if("9780007968671".Equals(x.BarCode))
-                //             SalesBinderAPI.UploadImage(x.BarCode,image);
-                //     });
+                SalesBinderAPI.Inventory.Where(x=>x.HasImageSaved()==false && x.Quantity>0)
+                    .ForEach(x=>
+                    {
+                        var image = ExtensionMethods.FindImagePath(x.BarCode);
+                        
+                        $"{x.BarCode} @ {image}".ConsoleWriteLine();
+                
+                        // if("9780007968671".Equals(x.BarCode))
+                        //     SalesBinderAPI.UploadImage(x.BarCode,image);
+                    });
             }
         }
     }

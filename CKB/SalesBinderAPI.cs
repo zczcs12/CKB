@@ -243,15 +243,17 @@ namespace CKB
                 - 60 requests per 1 minute, Block for 1 minute
              */
 
-            var nextRequestTime = _lastRequestTime.AddSeconds(2);
-
-            var untilNextAvailableTime = (DateTime.Now - nextRequestTime);
-
-            if (untilNextAvailableTime.TotalSeconds < 0)
-            {
-                Console.WriteLine($"Waiting {untilNextAvailableTime.TotalSeconds} seconds so don't hit api request limit.");
-                Thread.Sleep(Math.Abs(untilNextAvailableTime.Milliseconds));
-            }
+            Thread.Sleep(2000);
+            
+            // var nextRequestTime = _lastRequestTime.AddSeconds(2);
+            //
+            // var untilNextAvailableTime = (DateTime.Now - nextRequestTime);
+            //
+            // if (untilNextAvailableTime.TotalSeconds < 0)
+            // {
+            //     Console.WriteLine($"Waiting {untilNextAvailableTime.TotalSeconds} seconds so don't hit api request limit.");
+            //     Thread.Sleep(Math.Abs(untilNextAvailableTime.Milliseconds));
+            // }
         }
 
         private static string getResponse(string urlEnding_)
@@ -293,6 +295,13 @@ namespace CKB
             if (!_inventoryByBarcode.Value.TryGetValue(identifier_, out var record))
             {
                 $"Don't know of an inventory item with barcode {identifier_} so can't update it."
+                    .ConsoleWriteLine();
+                return;
+            }
+
+            if (record.Quantity == newQuantity_)
+            {
+                $"Quantity for {identifier_} ({record.Name}) is already set to {newQuantity_}"
                     .ConsoleWriteLine();
                 return;
             }
