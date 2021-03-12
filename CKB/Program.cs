@@ -91,8 +91,15 @@ namespace CKB
             {
                 Arguments.GetArgumentInfo()
                     .Select(x => new[] {$"--{x.LongName}", $"{x.HelpText}"})
+                    .OrderBy(x=>x[0])
                     .FormatIntoColumns(new[] {"Argument", "Help"})
                     .ConsoleWriteLine();
+                return;
+            }
+
+            if (EnvironmentVars.IsProperlySetup(out var error) == false)
+            {
+                error.ConsoleWriteLine();
                 return;
             }
 
