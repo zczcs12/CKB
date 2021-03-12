@@ -396,6 +396,22 @@ namespace CKB
                     ret.PackSize = val;
                 else if ("VAT".Equals(field))
                     ret.VAT = val;
+                else if ("Full RRP".Equals(field))
+                    ret.FullRRP = val;
+                else if ("Commodity Code".Equals(field))
+                    ret.CommodityCode = val;
+                else if ("Material Composition".Equals(field))
+                    ret.MaterialComposition = val;
+                else if ("Pack size".Equals(field))
+                    ret.PackSize = val;
+                else if ("Bin location".Equals(field))
+                {
+                    // we're deliberately ignoring as taking from overloaded unit-of-measure
+                }
+                else
+                {
+                    $"Not currently handling {field} (val={val}, item={ret.SKU}".ConsoleWriteLine();
+                }
             }
 
             var images = token_["images"];
@@ -411,8 +427,8 @@ namespace CKB
         public long Quantity { get; set; }
         public decimal Cost { get; set; }
         public decimal Price { get; set; }
-        public string SKU { get; set; }
         public long ItemNumber { get; set; }
+        public string SKU { get; set; }
         public string BarCode { get; set; }
 
         public string Id { get; set; }
@@ -423,11 +439,15 @@ namespace CKB
         public string KidsOrAdult { get; set; }
         public string ProductType { get; set; }
         public string BinLocation { get; set; }
-        
         public string BinLocationId { get; set; }
         public string PackSize { get; set; }
         public string Author { get; set; }
         public string VAT { get; set; }
+        public string FullRRP { get; set; }
+        public string CommodityCode { get; set; }
+        
+        public string MaterialComposition { get; set; }
+        
 
         public string ImageURLSmall { get; set; }
         public string ImageURLMedium { get; set; }
