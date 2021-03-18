@@ -13,13 +13,23 @@ namespace CKB
     internal static class KeepaAPI
     {
         private const string URI_ROOT = "https://api.keepa.com";
-        private static readonly string SAVE_PATH_ROOT = $@"{Environment.GetEnvironmentVariable("CKB_DATA_ROOT",EnvironmentVariableTarget.User)}\Keepa";
+        private static readonly string SAVE_PATH_ROOT = $@"{EnvironmentSetup.DataRoot}\Keepa";
         private static readonly string RECORDS_DIR = $"{SAVE_PATH_ROOT}\\records";
         private static readonly string IMAGES_DIR = $"{SAVE_PATH_ROOT}\\images";
         private static readonly string API_REQUESTS_DIR = $@"{SAVE_PATH_ROOT}\\api_lookup_requests";
         private static readonly string API_RESPONSES_DIR = $@"{SAVE_PATH_ROOT}\\api_lookup_responses";
         private static readonly string API_BOOK_LASTLOOKUP_DIR = $@"{SAVE_PATH_ROOT}\\api_book_lastlookup";
 
+        internal static IEnumerable<string> directories()
+        {
+            yield return SAVE_PATH_ROOT;
+            yield return RECORDS_DIR;
+            yield return IMAGES_DIR;
+            yield return API_REQUESTS_DIR;
+            yield return API_RESPONSES_DIR;
+            yield return API_BOOK_LASTLOOKUP_DIR;
+        }
+        
         private const string LAST_CALL_DATEFORMAT = "yyyyMMdd_HHmmss";
         
         private static readonly Lazy<string> _apiKey = new Lazy<string>(() => Environment.GetEnvironmentVariable("KEEPA_API_KEY", EnvironmentVariableTarget.User));

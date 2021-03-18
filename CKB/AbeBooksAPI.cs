@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 
@@ -6,10 +7,15 @@ namespace CKB
 {
     public static class AbeBooksAPI
     {
-        private static readonly string SAVE_PATH_ROOT = $@"{Environment.GetEnvironmentVariable("CKB_DATA_ROOT",EnvironmentVariableTarget.User)}\AbeBooks\Images";
+        private static readonly string SAVE_PATH_ROOT = $@"{EnvironmentSetup.DataRoot}\AbeBooks\Images";
 
         private static Lazy<WebClient> _webClient = new Lazy<WebClient>(() => new WebClient());
 
+        internal static IEnumerable<string> directories()
+        {
+            yield return SAVE_PATH_ROOT;
+        }
+        
         private static string localPathToImage(string identifier_) => $"{SAVE_PATH_ROOT}\\{identifier_}.jpg";
 
         public static string TryGetImageForIdentifier(string identifier_)

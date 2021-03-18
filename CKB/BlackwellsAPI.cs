@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 
@@ -8,8 +9,14 @@ namespace CKB
     {
         // https://blackwells.co.uk/jacket/l/9781782096580.jpg"
         
-        private static readonly string SAVE_PATH_ROOT = $@"{Environment.GetEnvironmentVariable("CKB_DATA_ROOT",EnvironmentVariableTarget.User)}\Blackwells\Images";
+        private static readonly string SAVE_PATH_ROOT = $@"{EnvironmentSetup.DataRoot}\Blackwells\Images";
 
+        internal static IEnumerable<string> directories()
+        {
+            yield return SAVE_PATH_ROOT;
+        }
+
+        
         private static Lazy<WebClient> _webClient = new Lazy<WebClient>(() => new WebClient());
 
         private static string localPathToImage(string identifier_) => $"{SAVE_PATH_ROOT}\\{identifier_}.jpg";

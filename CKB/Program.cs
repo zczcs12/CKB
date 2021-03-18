@@ -1,13 +1,11 @@
 ﻿using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Data.Common;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
-using DocumentFormat.OpenXml.Bibliography;
-using DocumentFormat.OpenXml.Spreadsheet;
-using DocumentFormat.OpenXml.Vml;
+using CsvHelper;
+using CsvHelper.Configuration;
 using Utility.CommandLine;
 
 namespace CKB
@@ -17,16 +15,16 @@ namespace CKB
         [Argument('a',"sbad","Sales Binder Account Download")]
         private static bool SalesBinderAccountsDownload { get; set; }
         
-        [Argument('b',"sbal","Sales Binder Account List")]
+        // [Argument('b',"sbal","Sales Binder Account List => csv")]
         private static bool SalesBinderAccountsList { get; set; }
         
         [Argument('c',"sbid","Sales Binder Inventory Download")]
         private static bool SalesBinderInventoryDownload { get; set; }
         
-        [Argument('d', "sbil", "Sales Binder Inventory List")]
+        [Argument('d', "sbil", "Sales Binder Inventory List => csv")]
         private static bool SalesBinderInventoryList { get; set; }
         
-        [Argument('e', "sbilc", "Sales Binder Inventory List (Current)")]
+        [Argument('e', "sbilc", "Sales Binder Inventory List (Current) => csv")]
         private static bool SalesBinderInventoryListCurrent { get; set; }
         
         [Argument('f',"sbimd", "Sales Binder Image Download")]
@@ -35,71 +33,65 @@ namespace CKB
         [Argument('g',"sbcd", "Sales Binder Contact Download")]
         private static bool SalesBinderContactsDownload { get; set; }
         
-        [Argument('h',"sbcl","Sales Binder Contact List")]
-        private static bool SalesBinderContactsList { get; set; }
-        
         [Argument('i',"sbinvd","Sales Binder Invoices Download")]
         private static bool SalesBinderInvoicesDownload { get; set; }
         
-        [Argument('v',"sbsd","Sales Binder Settings Download")]
+        [Argument('j',"sbiu","Sales Binder Inventory Update (from file)")]
+        private static bool SalesBinderInventoryUpdate { get; set; }
+        
+        // [Argument('v',"sbsd","Sales Binder Settings Download")]
         private static bool SalesBinderSettingsDownload { get; set; }
 
-        [Argument('x',"sbld","Sales Binder Locations Download")]
+        // [Argument('x',"sbld","Sales Binder Locations Download")]
         private static bool SalesBinderLocationsDownload { get; set; }
         
-        [Argument('y',"sbqfu","Sales Binder Quantities from csv file Upload")]
-        private static bool SalesBinderUpdateQuantitiesFromFile { get; set; }
-        
-        [Argument('u', "sbimu","Sales Binder Image Upload (for inventory without one)")]
+        [Argument('u', "sbimu","Sales Binder Image Upload (find for inventory without one)")]
         private static bool SalesBinderFindAndUploadImagesForInventoryWithoutAnImage { get; set; }
 
         [Argument('j',"kle","Keepa lookup ensure. Lookup given IDs in local keepa records. Try to update any missing.")]
         private static bool KeepaLookupEnsure { get; set; }
         
-        [Argument('k',"klf","Keepa lookup force i.e. force refresh of record for these identifiers.")]
-        private static bool KeepaLookupForceRefresh { get; set; }
+        [Argument('k',"force","Force updates")]
+        private static bool Force { get; set; }
+        
+        [Argument('/',"klp","Keepa lookup prime records.  Try to get a keepa record for anthing we've not tried before.")]
+        private static bool KeepaLookupPrimeRecords { get; set; }
         
         [Argument('l',"klri","Keepa lookup refresh inventory - if not updated in the last 24 hours")]
         private static bool KeepaLookupRefreshCurrentInventory { get; set; }
         
-        [Argument('m',"gwl","Generate warehouse list xlsx from given csv (id,qty) file")]
+        // [Argument('m',"gwl","Generate warehouse list xlsx from given csv (id,qty) file")]
         private static bool GenerateListForWarehouse { get; set; }
         
         [Argument('n', "gsr", "Generate sales report csv")]
         private static bool GenerateSalesReport { get; set; }
         
-        [Argument('o', "gir", "Generate current inventory csv")]
-        private static bool GenerateCurrentInventoryReport { get; set; }
-        
-        [Argument('p',"gslf","Generate stock list from file")]
-        private static bool GenerateStockListFromFile { get; set; }
-        
         [Argument('q',"kru","Try to topup keepa records")]
         private static bool TopupKeepaRecords { get; set; }
         
-        [Argument('t', "test", "Test code")]
+        // [Argument('t', "test", "Test code")]
         private static bool Test { get; set; }
         
-        [Argument('z',"output","File to write results to")]
-        private static bool OutputFilePath { get; set; }
+        [Argument('#',"gsli","Generate stock list from inventory => xlsx")]
+        private static bool GenerateStockListFromInventory { get; set; }
 
         static void Main(string[] args)
         {
             Arguments.Populate();
 
-            if (args == null || args.Length == 0 || args.First().Equals("/?"))
+            if (EnvironmentSetup.IsProperlySetup(out var error) == false)
+            {
+                error.ConsoleWriteLine();
+                return;
+            }
+
+            if (args == null || args.Length == 0 || args.First().Equals("/?") || args.Any(a=>a.StartsWith("-") && !a.StartsWith("--")))
             {
                 Arguments.GetArgumentInfo()
                     .Select(x => new[] {$"--{x.LongName}", $"{x.HelpText}"})
                     .OrderBy(x=>x[0])
                     .FormatIntoColumns(new[] {"Argument", "Help"})
                     .ConsoleWriteLine();
-                return;
-            }
-
-            if (EnvironmentVars.IsProperlySetup(out var error) == false)
-            {
-                error.ConsoleWriteLine();
                 return;
             }
 
@@ -115,7 +107,7 @@ namespace CKB
                 : input_;
             
             if(SalesBinderInventoryDownload)
-                SalesBinderAPI.RetrieveAndSaveInventory();
+                SalesBinderAPI.RetrieveAndSaveInventory(topup_:!Force);
             if(SalesBinderImageDownload)
                 SalesBinderAPI.DownloadBookImages();
             if(SalesBinderContactsDownload)
@@ -123,23 +115,53 @@ namespace CKB
             if(SalesBinderAccountsDownload)
                 SalesBinderAPI.RetrieveAndSaveAccounts();
             if(SalesBinderInvoicesDownload)
-                SalesBinderAPI.RetrieveAndSaveInvoices();
+                SalesBinderAPI.RetrieveAndSaveInvoices(topup_:!Force);
             if(SalesBinderSettingsDownload)
                 SalesBinderAPI.RetrieveAndSaveSettings();
             if(SalesBinderLocationsDownload)
                 SalesBinderAPI.RetrieveAndSaveLocations();
+
+            new (bool Do, string Arg, bool OnlyCurrent)[]
+                {
+                    (SalesBinderInventoryList, "sbil", false),
+                    (SalesBinderInventoryListCurrent, "sbilc", true)
+                }
+                .Where(x => x.Do)
+                .ForEach(set =>
+                {
+                    var outputFilePath = getArgument(set.Arg);
+
+                    if (string.IsNullOrEmpty(outputFilePath))
+                    {
+                        $"You need to supply an output filepath after '--{set.Arg}' (which should be an csv) to write the list to"
+                            .ConsoleWriteLine();
+                        return;
+                    }
+
+                    var list = SalesBinderAPI.Inventory;
+
+                    if (set.OnlyCurrent)
+                        list = list.Where(x => x.Quantity > 0).ToArray();
+
+                    var props = typeof(SalesBinderInventoryItem).GetProperties(BindingFlags.Instance |
+                                                                               BindingFlags.GetProperty |
+                                                                               BindingFlags.Public)
+                        .Where(x => !x.Name.Contains("Image"))
+                        .ToArray();
+
+                    var sb = new StringBuilder();
+                    sb.AppendLine(string.Join(",", props.Select(p => p.Name)));
+
+                    using (var writer = new StreamWriter(outputFilePath))
+                    using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
+                    {
+                        csv.WriteRecords(list
+                            .OrderByDescending(x => Math.Abs(x.Quantity))
+                            .ThenBy(x => x.Name));
+                    }
+                });
+                
             
-            if (SalesBinderInventoryList || SalesBinderInventoryListCurrent)
-            {
-                var list = SalesBinderAPI.Inventory;
-
-                if (SalesBinderInventoryListCurrent)
-                    list = list.Where(x => x.Quantity > 0).ToArray();
-                    
-                (list.Count()==0 ? "No local inventory found" : list.FormatIntoColumnsReflectOnType(60))
-                    .ConsoleWriteLine();
-            }
-
             if (SalesBinderAccountsList)
             {
                 var list = SalesBinderAPI.Accounts;
@@ -148,7 +170,7 @@ namespace CKB
                     .ConsoleWriteLine();
             }
 
-            if (KeepaLookupEnsure || KeepaLookupForceRefresh)
+            if (KeepaLookupEnsure)
             {
                 var key = KeepaLookupEnsure ? "kle" : "klf";
                 if (!lookup.ArgumentDictionary.TryGetValue(key, out var arg) || arg==null || string.IsNullOrEmpty(arg.ToString()))
@@ -161,7 +183,7 @@ namespace CKB
                     else
                         identifiers = arg.ToString().Split(',');
                     
-                    var result = KeepaAPI.GetDetailsForIdentifiers(identifiers,forceRefresh_:KeepaLookupForceRefresh);
+                    var result = KeepaAPI.GetDetailsForIdentifiers(identifiers,forceRefresh_:Force);
 
                     var failed = result.Where(x => x.Value == null);
                     if (failed.Any())
@@ -198,9 +220,23 @@ namespace CKB
                 }
             }
 
+            if (KeepaLookupPrimeRecords)
+            {
+                var items = SalesBinderAPI.Inventory.Where(x => !string.IsNullOrEmpty(x.BarCode))
+                    .Where(x => KeepaAPI.LastLookupTime(x.BarCode) == null);
+                
+                if(!items.Any())
+                    $"Have already tried to get keepa records for all items in inventory".ConsoleWriteLine();
+                else
+                {
+                    var ids = items.Take(100).Select(x => x.BarCode).Distinct().ToArray();
+                    KeepaAPI.GetDetailsForIdentifiers(ids);
+                }
+            }
+
             if (GenerateListForWarehouse)
             {
-                if (OutputFilePath == false || !hasArgument("output"))
+                if (!hasArgument("gwl"))
                 {
                     "You need to supply an output filepath (which should be an xlsx) to write the list to".ConsoleWriteLine();
                 }
@@ -227,13 +263,13 @@ namespace CKB
                         records.TryGetValue(x.Id, out var rec);
                         return (x.Id, x.Quantity, rec);
                     })
-                        .WriteWarehouseFile(getArgument("output"));
+                        .WriteWarehouseFile(getArgument("gwl"));
                 }
             }
 
             if (GenerateSalesReport)
             {
-                if (OutputFilePath == false || !hasArgument("output"))
+                if (!hasArgument("gsr"))
                     "You need to supply an output filepath (which should be an csv) to write the list to".ConsoleWriteLine();
                 else if (SalesBinderAPI.Invoices == null)
                     "No invoices found.  Have you downloaded them yet?".ConsoleWriteLine();
@@ -241,8 +277,6 @@ namespace CKB
                     "No inventory found.  Have you downloaded them yet?".ConsoleWriteLine();
                 else if(SalesBinderAPI.Accounts==null)
                     "No accounts found.  Have you downloaded them yet?".ConsoleWriteLine();
-                else if (OutputFilePath == false || !hasArgument("output"))
-                    "Please specify an output file path, which should be a csv".ConsoleWriteLine();
                 else
                 {
                     var invoicesByAllItems = SalesBinderAPI.Invoices
@@ -292,42 +326,7 @@ namespace CKB
                     var sb = new StringBuilder();
                     sb.AppendLine(setups.Select(s => s.Title).ToArray().Join(","));
                     rows.ForEach(row=>sb.AppendLine(setups.Select(s=>encaseStringWithComma(s.Func(row))).ToArray().Join(",")));
-                    File.WriteAllText(getArgument("output"),sb.ToString());
-                }
-            }
-
-            if (GenerateCurrentInventoryReport)
-            {
-                if (OutputFilePath == false || !hasArgument("output"))
-                    "You need to supply an output filepath (which should be an csv) to write the list to".ConsoleWriteLine();
-                else if (SalesBinderAPI.Inventory == null)
-                    "No inventory found.  Have you downloaded them yet?".ConsoleWriteLine();
-                else
-                {
-                    var setups = new (string Title, Func<SalesBinderInventoryItem, string> Func)[]
-                    {
-                        ("Name", x => x.Name),
-                        ("Author", x => x.Author),
-                        ("Qty", x => $"{x.Quantity}"),
-                        ("Cost", x => $"{x.Cost}"),
-                        ("Price", x => $"{x.Price}"),
-                        ("SKU", x => x.SKU),
-                        ("ItemNumber", x => $"{x.ItemNumber}"),
-                        ("BarCode", x => x.BarCode),
-                        ("Style", x => x.Style),
-                        ("KidsOrAdult", x => x.KidsOrAdult),
-                        ("ProductType", x => x.ProductType),
-                        ("BinLocation", x => x.BinLocation),
-                        ("PackSize", x => x.PackSize),
-                        ("VAT", x => x.VAT),
-                    };
-                    
-                    var sb = new StringBuilder();
-                    sb.AppendLine(setups.Select(s => s.Title).ToArray().Join(","));
-                    SalesBinderAPI.Inventory
-                        .Where(x=>x.Quantity>0)
-                        .ForEach(row=>sb.AppendLine(setups.Select(s=>encaseStringWithComma(s.Func(row))).ToArray().Join(",")));
-                    File.WriteAllText(getArgument("output"),sb.ToString());
+                    File.WriteAllText(getArgument("gsr"),sb.ToString());
                 }
             }
 
@@ -345,83 +344,6 @@ namespace CKB
                 }
             }
 
-            if (GenerateStockListFromFile)
-            {
-                if (OutputFilePath == false || !hasArgument("output"))
-                {
-                    "You need to supply an output filepath (which should be an xlsx) to write the list to".ConsoleWriteLine();
-                }
-                else if (!lookup.ArgumentDictionary.TryGetValue("gslf", out var arg) || arg==null || string.IsNullOrEmpty(arg.ToString()))
-                    "You need to supply a csv argument of the identifiers you want to lookup".ConsoleWriteLine();
-                else if (!File.Exists(arg.ToString()))
-                    $"File '{arg.ToString()}' does not exist.".ConsoleWriteLine();
-                else
-                {
-                    var items = File.ReadAllLines(arg.ToString()).Distinct().ToList();
-
-                    var imageLookup = items.Select(x =>
-                        {
-                            SalesBinderAPI.InventoryByBarcode.TryGetValue(x, out var book);
-                            return (Identifier: x, ImagePath: ExtensionMethods.FindImagePath(x), Book: book);
-                        })
-                        .ToList();
-                    
-                    imageLookup.Where(x=>string.IsNullOrEmpty(x.ImagePath))
-                        .ForEach(x=>$"Couldn't find image for {x.Identifier}".ConsoleWriteLine());
-                    
-                    imageLookup.WriteStockListFile(getArgument("output"));
-                }
-            }
-
-            if (SalesBinderUpdateQuantitiesFromFile)
-            {
-                if (!lookup.ArgumentDictionary.TryGetValue("sbqfu", out var arg) || arg==null || string.IsNullOrEmpty(arg.ToString()))
-                    "You need to supply a csv argument of the identifiers you want to lookup".ConsoleWriteLine();
-                else if (!File.Exists(arg.ToString()))
-                    $"File '{arg.ToString()}' does not exist.".ConsoleWriteLine();
-                else
-                {
-                    var inventoryByBarCode = SalesBinderAPI.InventoryByBarcode;
-
-                    var contents = File.ReadAllLines(arg.ToString())
-                        .Select(x => x.Split(','))
-                        .Select(x =>
-                        {
-                            if (x.Length != 2)
-                                return (Success: false, BarCode: null as string, NewQuantity: default(int),
-                                    Error: "Each line needs to have two entries, first barcode, then new quantity");
-
-                            var barcode = x[0];
-                            if (!inventoryByBarCode.TryGetValue(barcode, out var inventoryItem))
-                                return (Success: false, BarCode: barcode, NewQuantity: default(int),
-                                    Error: $"Could find an item in local inventory records with barcode {barcode}");
-
-                            if (!int.TryParse(x[1], out var quantity))
-                                return (Success: false, BarCode: barcode, NewQuantity: default(int),
-                                    Error: $"Couldn't parse given quantity ('{x[1]}') to an integer");
-
-                            return (Success: true, BarCode: barcode, NewQuantity: quantity,
-                                Error: null);
-                        })
-                        .ToArray();
-
-                    if (contents.Any(x => x.Success == false))
-                    {
-                        $"There were some problems with csv fields provided ('{arg.ToString()}'):"
-                            .ConsoleWriteLine();
-                        
-                        contents.Where(x=>x.Success==false)
-                            .Select(x=>new[] {x.BarCode,x.Error})
-                            .FormatIntoColumns(new[] {"Barcode","Error"})
-                            .ConsoleWriteLine();
-                    }
-                    else
-                    {
-                        contents.ForEach(x=>SalesBinderAPI.UpdateQuantity(x.BarCode,x.NewQuantity));   
-                    }
-                }
-            }
-
             if (SalesBinderFindAndUploadImagesForInventoryWithoutAnImage)
             {
                 SalesBinderAPI.Inventory.Where(x=>x.HasImageSaved()==false && x.Quantity>0)
@@ -435,9 +357,87 @@ namespace CKB
                     });
                 
             }
+            
+            if (GenerateStockListFromInventory)
+            {
+                if (!hasArgument("gsli"))
+                {
+                    "You need to supply an output filepath (which should be an xlsx) to write the list to".ConsoleWriteLine();
+                }
+                else
+                {
+                    var inventory = SalesBinderAPI.Inventory;
 
+                    if (!inventory.Any())
+                    {
+                        $"There is no salesbinder inventory locally.  run 'CKB.exe --sbid' to download inventory before trying to generate a stock list"
+                            .ConsoleWriteLine();
+                    }
+                    else
+                    {
+                        inventory.Where(x=>x.Quantity>0).Select(x => (x.BarCode, ExtensionMethods.FindImagePath(x.BarCode), x))
+                            .WriteStockListFile(getArgument("gsli"));
+                    }
+                }
+            }
+
+
+            if (SalesBinderInventoryUpdate)
+            {
+                SalesBinderInventoryItem[] recs;
+                
+                using (var reader = new StreamReader("e:\\ste\\list.csv"))
+                using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
+                {
+                    recs = csv.GetRecords<SalesBinderInventoryItem>().ToArray();
+                }
+                
+                recs.ForEach(potentialUpdate => { potentialUpdate.DetectChanges(Force); });
+            }
+            
             if (Test)
             {
+                // var item = SalesBinderAPI.Inventory.FirstOrDefault(x =>
+                //     x.Id.Equals("5e5920bf-8dec-4c7e-81d2-7f783f71d8bf"));
+
+                 // var c = SalesBinderAPI.RetrieveJsonForInventoryItem("5c800e24-6c7c-4416-a3a5-32fe3f71d8bf");
+                 // c.ToString().ConsoleWriteLine();
+
+                 // SalesBinderAPI.UnitsOfMeasure.ForEach(x => x.LongName.ConsoleWriteLine());
+                 
+                 
+                // c.ToString().ConsoleWriteLine();
+                // var blah = c["item"]["quantity"];
+                // var cust = c["item"]["item_details"];
+                //
+                // ((JValue) c["item"]["quantity"]).Value = 100;
+                //
+                // var custArry = (JArray) cust;
+                //
+                // c.ToString().ConsoleWriteLine();
+
+                // var itemObject = new JObject();
+                // var p = new JObject(new JProperty("item",itemObject));
+                // itemObject.Add(new JProperty("quantity",100));
+                // itemObject.Add(new JProperty("name","Ben is the best"));
+                // p.ToString().ConsoleWriteLine();
+
+                
+                // SalesBinderAPI.CustomFieldNameToId.ForEach(x=>$"{x.Key} => {x.Value}".ConsoleWriteLine());
+                
+                // if(true)
+                // {
+                //     SalesBinderInventoryItem[] recs;
+                //
+                //     using (var reader = new StreamReader("e:\\ste\\list.csv"))
+                //     using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
+                //     {
+                //         recs = csv.GetRecords<SalesBinderInventoryItem>().ToArray();
+                //     }
+                //
+                //     recs.ForEach(potentialUpdate => { potentialUpdate.DetectChanges(); });
+                // }
+
                 // SalesBinderAPI.Inventory.GroupBy(x=>x.BarCode)
                 //     .Where(x=>x.Count()>1)
                 //     .SelectMany(x=>x)
@@ -451,17 +451,17 @@ namespace CKB
                 //     .ForEach(x=>BlackwellsAPI.TryGetImageForIdentifier(x.BarCode));
 
                 // SalesBinderAPI.UnitsOfMeasure.ForEach(x => $"{x.Id} => {x.ShortName}".ConsoleWriteLine());
-                
-                SalesBinderAPI.Inventory.Where(x=>x.HasImageSaved()==false && x.Quantity>0)
-                    .ForEach(x=>
-                    {
-                        var image = ExtensionMethods.FindImagePath(x.BarCode);
-                        
-                        $"{x.BarCode} @ {image}".ConsoleWriteLine();
-                
-                        // if("9780007968671".Equals(x.BarCode))
-                        //     SalesBinderAPI.UploadImage(x.BarCode,image);
-                    });
+
+                // SalesBinderAPI.Inventory.Where(x=>x.HasImageSaved()==false && x.Quantity>0)
+                //     .ForEach(x=>
+                //     {
+                //         var image = ExtensionMethods.FindImagePath(x.BarCode);
+                //         
+                //         $"{x.BarCode} @ {image}".ConsoleWriteLine();
+                //
+                //         // if("9780007968671".Equals(x.BarCode))
+                //         //     SalesBinderAPI.UploadImage(x.BarCode,image);
+                //     });
             }
         }
     }

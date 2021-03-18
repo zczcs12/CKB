@@ -7,11 +7,9 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Threading;
-using System.Web.Hosting;
-using DocumentFormat.OpenXml.Drawing;
+using CsvHelper.Configuration.Attributes;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Path = System.IO.Path;
 
 namespace CKB
 {
@@ -19,7 +17,15 @@ namespace CKB
     {
 
         private const string URI_ROOT = "https://ckb.salesbinder.com/api/2.0/";
-        public static readonly  string SAVE_PATH_ROOT = $@"{Environment.GetEnvironmentVariable("CKB_DATA_ROOT",EnvironmentVariableTarget.User)}\SalesBinder";
+        internal static readonly string SAVE_PATH_ROOT = $@"{EnvironmentSetup.DataRoot}\SalesBinder";
+
+
+        internal static IEnumerable<string> directories()
+        {
+            yield return SAVE_PATH_ROOT;
+            yield return ImageDirectory;
+            yield return InventoryItemsDirectory;
+        }
 
         private static string InventoryFilePath => $@"{SAVE_PATH_ROOT}\inventory.json";
         private static string ContactsFilePath = $@"{SAVE_PATH_ROOT}\contacts.json";
@@ -27,9 +33,17 @@ namespace CKB
         private static string InvoicesFilePath = $@"{SAVE_PATH_ROOT}\invoices.json";
         private static string SettingsFilePath = $@"{SAVE_PATH_ROOT}\settings.json";
         private static string LocationsFilePath = $@"{SAVE_PATH_ROOT}\locations.json";
-        private static string UnitsOfMeasureFilePath = $@"{SAVE_PATH_ROOT}\units_of_measure.json";
+
+        private static string InventoryItemsDirectory = $@"{SAVE_PATH_ROOT}\inventoryrecords";
+        private static string ImageDirectory = $@"{SAVE_PATH_ROOT}\images";
+
+
 
         #region Inventory
+
+        private static string InventoryInvidualItemPath(string item_id_) =>
+            $@"{InventoryItemsDirectory}\{item_id_}.json";
+
         private static readonly Lazy<SalesBinderInventoryItem[]> _inventory = new Lazy<SalesBinderInventoryItem[]>(() =>
             File.Exists(InventoryFilePath)
                 ? JsonConvert.DeserializeObject<SalesBinderInventoryItem[]>(File.ReadAllText(InventoryFilePath))
@@ -43,19 +57,19 @@ namespace CKB
         private static readonly Lazy<Dictionary<string, SalesBinderInventoryItem>> _inventoryByBarcode =
             new Lazy<Dictionary<string, SalesBinderInventoryItem>>(
                 () => _inventory.Value.GroupBy(x => x.BarCode)
-                    .ToDictionary(x => x.Key, x => x.OrderByDescending(b=>b.Quantity).First())
+                    .ToDictionary(x => x.Key, x => x.OrderByDescending(b => b.Quantity).First())
             );
 
         public static SalesBinderInventoryItem[] Inventory => _inventory.Value;
         public static IDictionary<string, SalesBinderInventoryItem> InventoryById => _inventoryById.Value;
         public static IDictionary<string, SalesBinderInventoryItem> InventoryByBarcode => _inventoryByBarcode.Value;
 
-        
-        
+
+
         #endregion
 
         #region Contacts
-        
+
         private static Lazy<SalesBinderContact[]> _contacts = new Lazy<SalesBinderContact[]>(() =>
             File.Exists(ContactsFilePath)
                 ? JsonConvert.DeserializeObject<SalesBinderContact[]>(File.ReadAllText(ContactsFilePath))
@@ -64,9 +78,9 @@ namespace CKB
         public static SalesBinderContact[] Contacts => _contacts.Value;
 
         #endregion
-        
-        #region Accounts 
-        
+
+        #region Accounts
+
         private static readonly Lazy<SalesBinderAccount[]> _accounts = new Lazy<SalesBinderAccount[]>(() =>
             File.Exists(AccountsFilePath)
                 ? JsonConvert.DeserializeObject<SalesBinderAccount[]>(File.ReadAllText(AccountsFilePath))
@@ -76,28 +90,29 @@ namespace CKB
             new Lazy<Dictionary<string, SalesBinderAccount>>(
                 () => _accounts.Value.ToDictionary(x => x.Id, x => x)
             );
+
         public static SalesBinderAccount[] Accounts => _accounts.Value;
         public static IDictionary<string, SalesBinderAccount> AccountById => _accountsById.Value;
-        
+
         #endregion
-        
+
         #region Invoices
-        
-        private static readonly Lazy<SalesBinderInvoice[]> _invoices = new Lazy<SalesBinderInvoice[]>(()=>
+
+        private static readonly Lazy<SalesBinderInvoice[]> _invoices = new Lazy<SalesBinderInvoice[]>(() =>
             File.Exists(InvoicesFilePath)
                 ? JsonConvert.DeserializeObject<SalesBinderInvoice[]>(File.ReadAllText(InvoicesFilePath))
                 : null);
 
         public static SalesBinderInvoice[] Invoices => _invoices.Value;
-        
+
         #endregion
-        
+
         #region Units of Measure
 
         private static readonly Lazy<SalesBinderUnitOfMeasure[]> _unitsOfMeasure = new Lazy<SalesBinderUnitOfMeasure[]>(
             () =>
             {
-                var s = JToken.Parse(File.ReadAllText(UnitsOfMeasureFilePath));
+                var s = JToken.Parse(ExtensionMethods.GetTextFromEmbeddedResource("CKB.Static.units_of_measure.json"));
                 var arr = s?.ExtractArray("data");
                 return arr == null ? null : arr.Select(SalesBinderUnitOfMeasure.Parse).ToArray();
             });
@@ -110,30 +125,64 @@ namespace CKB
             );
 
         public static IDictionary<string, SalesBinderUnitOfMeasure> UnitsOfMeasureByName => _unitsOfMeasureByName.Value;
-        
+
         #endregion
 
+        private static readonly Lazy<Dictionary<string, string>> _customFieldCodes =
+            new Lazy<Dictionary<string, string>>(
+                () =>
+                {
+                    var s = JToken.Parse(ExtensionMethods.GetTextFromEmbeddedResource("CKB.Static.custom_fields.json"));
+                    var arr = s?.ExtractArray("data");
+
+                    return arr.ToDictionary(x => x.ExtractString("name"), x => x.ExtractString("custom_field_id"));
+                }
+            );
+
+        public static Dictionary<string, string> CustomFieldNameToId => _customFieldCodes.Value;
+        
         private static readonly Lazy<HttpClient> _client = new Lazy<HttpClient>(() =>
         {
             var apiKey = Environment.GetEnvironmentVariable("SALESBINDER_API_KEY", EnvironmentVariableTarget.User);
 
             var client = new HttpClient();
             var byteArray = Encoding.ASCII.GetBytes($"{apiKey}:x");
-            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
+            client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
             return client;
         });
 
         private static Lazy<WebClient> _webClient = new Lazy<WebClient>(() => new WebClient());
 
 
-        public static void RetrieveAndSaveInventory()
-            => retrieveAndSave(RetrieveInventory, InventoryFilePath);
+        public static void RetrieveAndSaveInventory(bool topup_)
+            => retrieveAndSave(() =>
+            {
+                var current = Inventory;
 
-        public static IEnumerable<SalesBinderInventoryItem> RetrieveInventory()
-            => retrievePaginated("items", "items", SalesBinderInventoryItem.Parse,"&pageLimit=100");
-        
+                if (!topup_ || !current.Any()) return RetrieveInventory();
+
+                var lastUpdate = new FileInfo(InventoryFilePath).LastWriteTimeUtc;
+
+                var topup = RetrieveInventory(lastUpdate.AddDays(-1d));
+
+                if (!topup.Any()) return current;
+
+                var currentD = current.ToDictionary(x => x.Id, x => x);
+                topup.ForEach(x => currentD[x.Id] = x);
+
+                return currentD.Values;
+
+            }, InventoryFilePath);
+
+        public static IEnumerable<SalesBinderInventoryItem> RetrieveInventory(DateTime? since_ = null)
+            => since_.HasValue
+                ? retrievePaginated("items", "items", SalesBinderInventoryItem.Parse,
+                    $"&pageLimit=100&modifiedSince={since_.Value.ToEpochTime()}")
+                : retrievePaginated("items", "items", SalesBinderInventoryItem.Parse, "&pageLimit=100&");
+
         private static IEnumerable<T> retrievePaginated<T>(string apiName_, string groupTokenName_,
-            Func<JToken, T> creator_, string optionalArgs_=null)
+            Func<JToken, T> creator_, string optionalArgs_ = null)
         {
             var allItems = new List<T>();
 
@@ -181,12 +230,33 @@ namespace CKB
         public static void RetrieveAndSaveAccounts()
             => retrieveAndSave(RetrieveAccounts, AccountsFilePath);
 
-        public static IEnumerable<SalesBinderInvoice> RetrieveInvoices()
-            => retrievePaginated("documents", "documents", x => SalesBinderInvoice.Parse(x), "&contextId=5&pageLimit=200");
+        public static IEnumerable<SalesBinderInvoice> RetrieveInvoices(DateTime? since_ = null)
+            => since_.HasValue
+                ? retrievePaginated("documents", "documents", x => SalesBinderInvoice.Parse(x),
+                    $"&contextId=5&pageLimit=200&modifiedSince={since_.Value.ToEpochTime()}")
+                : retrievePaginated("documents", "documents", x => SalesBinderInvoice.Parse(x),
+                    "&contextId=5&pageLimit=200");
 
-        public static void RetrieveAndSaveInvoices()
-            => retrieveAndSave(RetrieveInvoices, InvoicesFilePath);
-        
+        public static void RetrieveAndSaveInvoices(bool topup_)
+            => retrieveAndSave(() =>
+            {
+                var current = Invoices;
+
+                if (!topup_ || !current.Any()) return RetrieveInvoices();
+
+                var lastUpdate = new FileInfo(InvoicesFilePath).LastWriteTimeUtc;
+
+                var topup = RetrieveInvoices(lastUpdate.AddDays(-1d));
+
+                if (!topup.Any()) return current;
+
+                var currentD = current.ToDictionary(x => x.Id, x => x);
+                topup.ForEach(x => currentD[x.Id] = x);
+
+                return currentD.Values;
+
+            }, InvoicesFilePath);
+
         private static void retrieveAndSave<T>(Func<IEnumerable<T>> func_, string filePath_)
         {
             var allItems = func_();
@@ -208,12 +278,12 @@ namespace CKB
                 .ForEach(item =>
                 {
                     var sets = new (SalesBinderInventoryItem Book, string Url, string File)[]
-                    {
-                        (item,item.ImageURLSmall,item.ImageFilePath(ImageSize.Small)),
-                        (item,item.ImageURLMedium,item.ImageFilePath(ImageSize.Medium)),
-                        (item,item.ImageURLLarge,item.ImageFilePath(ImageSize.Large)),
-                    }
-                    .Where(x => !string.IsNullOrEmpty(x.Url) && !File.Exists(x.File));
+                        {
+                            (item, item.ImageURLSmall, item.ImageFilePath(ImageSize.Small)),
+                            (item, item.ImageURLMedium, item.ImageFilePath(ImageSize.Medium)),
+                            (item, item.ImageURLLarge, item.ImageFilePath(ImageSize.Large)),
+                        }
+                        .Where(x => !string.IsNullOrEmpty(x.Url) && !File.Exists(x.File));
 
                     if (!sets.Any()) return;
 
@@ -232,9 +302,8 @@ namespace CKB
                 });
         }
 
-
-
         private static DateTime _lastRequestTime;
+
         private static void blockIfNecessary()
         {
             /* salesbinder support:
@@ -244,7 +313,7 @@ namespace CKB
              */
 
             Thread.Sleep(2000);
-            
+
             // var nextRequestTime = _lastRequestTime.AddSeconds(2);
             //
             // var untilNextAvailableTime = (DateTime.Now - nextRequestTime);
@@ -270,7 +339,7 @@ namespace CKB
             var httpContent = new StringContent(json_, Encoding.UTF8, "application/json");
             var uri = new Uri($"{URI_ROOT}{urlEnding_}");
             var response = _client.Value.PutAsync(uri, httpContent).Result;
-            _lastRequestTime=DateTime.Now;
+            _lastRequestTime = DateTime.Now;
             return response?.Content.ReadAsStringAsync().Result;
         }
 
@@ -281,39 +350,26 @@ namespace CKB
 
             var request = new HttpRequestMessage(HttpMethod.Post, uri);
             request.Content = new ByteArrayContent(File.ReadAllBytes(filePath_));
-            request.Content.Headers.ContentType=MediaTypeHeaderValue.Parse("image/jpeg");
+            request.Content.Headers.ContentType = MediaTypeHeaderValue.Parse("image/jpeg");
 
             var response = _client.Value.SendAsync(request).Result;
-            _lastRequestTime=DateTime.Now;
-            
+            _lastRequestTime = DateTime.Now;
+
             return response?.Content.ReadAsStringAsync().Result;
         }
-        
-        
-        public static void UpdateQuantity(string identifier_, long newQuantity_)
+
+        public static void SendItemUpdate(string itemId_, string json_)
         {
-            if (!_inventoryByBarcode.Value.TryGetValue(identifier_, out var record))
-            {
-                $"Don't know of an inventory item with barcode {identifier_} so can't update it."
-                    .ConsoleWriteLine();
-                return;
-            }
-
-            if (record.Quantity == newQuantity_)
-            {
-                $"Quantity for {identifier_} ({record.Name}) is already set to {newQuantity_}"
-                    .ConsoleWriteLine();
-                return;
-            }
-
-            var urlEnding = $"items/{record.Id}.json";
+            var response = putJson($"items/{itemId_}.json", json_);
             
-            var json = "{ \"item\": { \"quantity\" : <qty> } }"
-                .Replace("<qty>", $"{newQuantity_}");
-
-            var response = putJson(urlEnding, json);
-
             response.ConsoleWriteLine();
+        }
+
+        public static JObject RetrieveJsonForInventoryItem(string itemId_)
+        {
+            var response = getResponse($"items/{itemId_}.json");
+
+            return JObject.Parse(response);
         }
 
         public static void UploadImage(string identifier_, string imagePath_)
@@ -335,14 +391,16 @@ namespace CKB
             var urlEnding = $"images/upload/{record.Id}.json";
 
             var response = postImage(urlEnding, imagePath_);
-            
+
             response.ConsoleWriteLine();
         }
     }
 
     public enum ImageSize
     {
-        Small, Medium, Large
+        Small,
+        Medium,
+        Large
     }
 
     public class SalesBinderInventoryItem
@@ -351,14 +409,14 @@ namespace CKB
         {
             var ret = new SalesBinderInventoryItem
             {
-                Name = token_.ExtractString("name"),
-                Quantity = token_.ExtractLong("quantity"),
-                Cost = token_.ExtractDecimal("cost"),
-                Price = token_.ExtractDecimal("price"),
-                SKU = token_.ExtractString("sku"),
-                ItemNumber = token_.ExtractLong("item_number"),
-                BarCode = token_.ExtractString("barcode"),
-                Id = token_.ExtractString("id"),
+                Name = token_.ExtractString(InventoryFields.Name),
+                Quantity = token_.ExtractLong(InventoryFields.Quantity),
+                Cost = token_.ExtractDecimal(InventoryFields.Cost),
+                Price = token_.ExtractDecimal(InventoryFields.Price),
+                SKU = token_.ExtractString(InventoryFields.SKU),
+                ItemNumber = token_.ExtractLong(InventoryFields.ItemNumber),
+                BarCode = token_.ExtractString(InventoryFields.BarCode),
+                Id = token_.ExtractString(InventoryFields.Id),
             };
 
             try
@@ -370,7 +428,7 @@ namespace CKB
             catch
             {
             }
-            
+
             var details = token_["item_details"] as JArray;
 
             foreach (var det in details)
@@ -378,40 +436,8 @@ namespace CKB
                 var field = det["custom_field"]["name"].ToString();
                 var val = det["value"].ToString();
 
-                if ("Style".Equals(field))
-                    ret.Style = val;
-                else if ("Country of Origin".Equals(field))
-                    ret.CountryOfOrigin = val;
-                else if ("Publisher".Equals(field))
-                    ret.Publisher = val;
-                else if ("Kids/adult".Equals(field))
-                    ret.KidsOrAdult = val;
-                else if ("Product Type".Equals(field))
-                    ret.ProductType = val;
-                else if ("Author".Equals(field))
-                    ret.Author = val;
-                // else if ("Bin location".Equals(field))
-                //     ret.BinLocation = val;
-                else if ("Pack size".Equals(field))
-                    ret.PackSize = val;
-                else if ("VAT".Equals(field))
-                    ret.VAT = val;
-                else if ("Full RRP".Equals(field))
-                    ret.FullRRP = val;
-                else if ("Commodity Code".Equals(field))
-                    ret.CommodityCode = val;
-                else if ("Material Composition".Equals(field))
-                    ret.MaterialComposition = val;
-                else if ("Pack size".Equals(field))
-                    ret.PackSize = val;
-                else if ("Bin location".Equals(field))
-                {
-                    // we're deliberately ignoring as taking from overloaded unit-of-measure
-                }
-                else
-                {
-                    $"Not currently handling {field} (val={val}, item={ret.SKU}".ConsoleWriteLine();
-                }
+                if (_customFields.TryGetValue(field, out var f))
+                    f?.Invoke(ret, val);
             }
 
             var images = token_["images"];
@@ -423,37 +449,273 @@ namespace CKB
             return ret;
         }
 
+        private static readonly Dictionary<string, Action<SalesBinderInventoryItem, string>> _customFields =
+            new Dictionary<string, Action<SalesBinderInventoryItem, string>>
+            {
+                {InventoryCustomFields.ProductType, (i, v) => i.ProductType = v},
+                {InventoryCustomFields.ProductType2, (i, v) => i.ProductType2 = v},
+                {InventoryCustomFields.ProductType3, (i, v) => i.ProductType3 = v},
+                {InventoryCustomFields.Style, (i, v) => i.Style = v},
+                {InventoryCustomFields.CountryOfOrigin, (i, v) => i.CountryOfOrigin = v},
+                {InventoryCustomFields.Publisher, (i, v) => i.Publisher = v},
+                {InventoryCustomFields.KidsAdult, (i, v) => i.KidsOrAdult = v},
+                {InventoryCustomFields.Condition, (i, v) => i.Condition = v},
+                {InventoryCustomFields.Author, (i, v) => i.Author = v},
+                {InventoryCustomFields.PackSize, (i, v) => i.PackSize = v},
+                {InventoryCustomFields.VAT, (i, v) => i.VAT = v},
+                {InventoryCustomFields.FullRrp, (i, v) => i.FullRRP = v},
+                {InventoryCustomFields.CommodityCode, (i, v) => i.CommodityCode = v},
+                {InventoryCustomFields.MaterialComposition, (i, v) => i.MaterialComposition = v},
+                {InventoryCustomFields.Clearance, (i, v) => i.Clearance = v},
+                {InventoryCustomFields.BinLocaiton, null},
+            };
+
+
+        [Index(0)]
         public string Name { get; set; }
-        public long Quantity { get; set; }
-        public decimal Cost { get; set; }
-        public decimal Price { get; set; }
-        public long ItemNumber { get; set; }
+        [Index(1)]
         public string SKU { get; set; }
+        [Index(2)]
         public string BarCode { get; set; }
-
-        public string Id { get; set; }
-        
-        public string Style { get; set; }
-        public string CountryOfOrigin { get; set; }
-        public string Publisher { get; set; }
-        public string KidsOrAdult { get; set; }
-        public string ProductType { get; set; }
-        public string BinLocation { get; set; }
-        public string BinLocationId { get; set; }
-        public string PackSize { get; set; }
-        public string Author { get; set; }
-        public string VAT { get; set; }
+        [Index(3)]
+        public long Quantity { get; set; }
+        [Index(4)]
+        public decimal Cost { get; set; }
+        [Index(5)]
+        public decimal Price { get; set; }
+        [Index(6)]
         public string FullRRP { get; set; }
+        [Index(7)]
+        public string Author { get; set; }
+        [Index(8)]
+        public string Publisher { get; set; }
+        [Ignore]
+        public long ItemNumber { get; set; }
+        [Index(9)]
+        public string Style { get; set; }
+        [Index(10)]
+        public string CountryOfOrigin { get; set; }
+        [Index(11)]
+        public string KidsOrAdult { get; set; }
+        [Index(12)]
+        public string ProductType { get; set; }
+        [Index(13)]
+        public string ProductType2 { get; set; }
+        [Index(14)]
+        public string ProductType3 { get; set; }
+        [Index(15)]
+        public string Condition { get; set; }
+        [Index(16)]
+        public string Clearance { get; set; }
+        [Index(17)]
+        public string BinLocation { get; set; }
+        [Ignore]
+        public string BinLocationId { get; set; }
+        [Index(18)]
+        public string PackSize { get; set; }
+        [Index(19)]
+        public string VAT { get; set; }
+        [Index(20)]
         public string CommodityCode { get; set; }
-        
+        [Index(21)]
         public string MaterialComposition { get; set; }
-        
-
+        [Index(22)]
+        public string Id { get; set; }
+        [Ignore]
         public string ImageURLSmall { get; set; }
+        [Ignore]
         public string ImageURLMedium { get; set; }
+        [Ignore]
         public string ImageURLLarge { get; set; }
     }
 
+    public static class InventoryCustomFields
+    {
+        public const string ProductType = "Product Type";
+        public const string ProductType2 = "Product Type 2";
+        public const string ProductType3 = "Product Type 3";
+        public const string Style = "Style";
+        public const string CountryOfOrigin = "Country of Origin";
+        public const string Publisher = "Publisher";
+        public const string KidsAdult = "Kids/adult";
+        public const string Condition = "Condition";
+        public const string Author = "Author";
+        public const string PackSize = "Pack size";
+        public const string VAT = "VAT";
+        public const string FullRrp = "Full RRP";
+        public const string CommodityCode = "Commodity Code";
+        public const string MaterialComposition = "Material Composition";
+        public const string Clearance = "Clearance";
+        public const string BinLocaiton = "Bin Location";
+    }
+
+    public static class InventoryFields
+    {
+        public const string Name = "name";
+        public const string SKU = "sku";
+        public const string BarCode = "barcode";
+        public const string Quantity = "quantity";
+        public const string Cost = "cost";
+        public const string Price = "price";
+        public const string ItemNumber = "item_number";
+        public const string Id = "id";
+    }
+
+    public static class SalesBinderInventoryItemExtensions
+    {
+        private static void setItemDetail(JObject root, string customFieldname_, object value_)
+        {
+            var arr = (JArray) root["item"]["item_details"];
+
+            var set = false;
+            
+            arr.ForEach(a =>
+            {
+                var field = a["custom_field"]["name"].ToString();
+
+                if (field.Equals(customFieldname_))
+                {
+                    ((JValue) a["value"]).Value = value_;
+                    set = true;
+                }
+            });
+
+            if (set) return;
+            
+            var itemId = root["item"].ExtractString("id");
+
+            var toAdd = new JObject(
+                new JProperty("item_id", itemId),
+                new JProperty("custom_field_id", SalesBinderAPI.CustomFieldNameToId[customFieldname_]),
+                new JProperty("value", value_)
+            );
+            
+            arr.Add(toAdd);
+        }
+
+        private static void setBinLocation(JObject root, string value_)
+        {
+            if (!SalesBinderAPI.UnitsOfMeasureByName.TryGetValue(value_, out var unitOfMeasure))
+            {
+                $"Error - can't find a unit of measure with given name {value_}".ConsoleWriteLine();
+                return;
+            }
+            
+            setItemDetail(root,InventoryCustomFields.BinLocaiton,value_);
+
+            if(root["item"].TryExtractToken("unit_of_measure",out var uom))
+            {
+                uom["id"] = unitOfMeasure.Id;
+                uom["full_name"] = unitOfMeasure.LongName;
+                uom["short_name"] = unitOfMeasure.ShortName;
+            }
+        }
+
+
+        private static (string FieldName, Func<SalesBinderInventoryItem, string> Func, Action<JObject, string> Update)[] _strUpdates =
+            new (string,  Func<SalesBinderInventoryItem, string> Func, Action<JObject, string> Update)[]
+            {
+                (InventoryFields.Name, x => x.Name, (o, s) => ((JValue) o["item"][InventoryFields.Name]).Value = s),
+                (InventoryFields.SKU, x => x.SKU, (o, s) => ((JValue) o["item"][InventoryFields.SKU]).Value = s),
+                (InventoryFields.BarCode, x => x.BarCode, (o, s) => ((JValue) o["item"][InventoryFields.BarCode]).Value = s),
+                (InventoryCustomFields.ProductType, x => x.ProductType, (o, s) => setItemDetail(o, InventoryCustomFields.ProductType, s)),
+                (InventoryCustomFields.ProductType2, x => x.ProductType2, (o, s) => setItemDetail(o, InventoryCustomFields.ProductType2, s)),
+                (InventoryCustomFields.ProductType3, x => x.ProductType3, (o, s) => setItemDetail(o, InventoryCustomFields.ProductType3, s)),
+                (InventoryCustomFields.Clearance, x => x.Clearance, (o, s) => setItemDetail(o, InventoryCustomFields.Clearance, s)),
+                (InventoryCustomFields.BinLocaiton, x => x.BinLocation, (o, s) => setBinLocation(o, s)),
+                (InventoryCustomFields.PackSize, x => x.PackSize, (o, s) => setItemDetail(o, InventoryCustomFields.PackSize, s)),
+                (InventoryCustomFields.Author, x => x.Author, (o, s) => setItemDetail(o, InventoryCustomFields.Author, s)),
+                (InventoryCustomFields.KidsAdult, x => x.KidsOrAdult, (o, s) => setItemDetail(o, InventoryCustomFields.KidsAdult, s)),
+                (InventoryCustomFields.FullRrp, x => x.FullRRP, (o, s) => setItemDetail(o, InventoryCustomFields.FullRrp, s)),
+                (InventoryCustomFields.Style, x => x.Style, (o, s) => setItemDetail(o, InventoryCustomFields.Style, s)),
+                (InventoryCustomFields.Publisher, x => x.Publisher, (o, s) => setItemDetail(o, InventoryCustomFields.Publisher, s)),
+                (InventoryCustomFields.MaterialComposition, x => x.MaterialComposition, (o, s) => setItemDetail(o, InventoryCustomFields.MaterialComposition, s)),
+                (InventoryCustomFields.CountryOfOrigin, x => x.CountryOfOrigin, (o, s) => setItemDetail(o, InventoryCustomFields.CountryOfOrigin, s)),
+                (InventoryCustomFields.CommodityCode, x => x.CommodityCode, (o, s) => setItemDetail(o, InventoryCustomFields.CommodityCode, s)),
+                (InventoryCustomFields.Condition, x => x.Condition, (o, s) => setItemDetail(o, InventoryCustomFields.Condition, s)),
+                (InventoryCustomFields.VAT, x => x.VAT, (o, s) => setItemDetail(o, InventoryCustomFields.VAT, s)),
+            };
+        
+        private static (string FieldName, Func<SalesBinderInventoryItem, decimal> Func, Action<JObject,decimal> Update)[] _decUpdates = new (string, Func<SalesBinderInventoryItem, decimal> Func, Action<JObject, decimal> Update)[]
+        {
+            (InventoryFields.Cost, x=>x.Cost,(o,s)=>((JValue) o["item"][InventoryFields.Cost]).Value=s),
+            (InventoryFields.Price, x=>x.Price,(o,s)=>((JValue) o["item"][InventoryFields.Price]).Value=s),
+        };
+
+        private static (string FieldName, Func<SalesBinderInventoryItem, long> Func, Action<JObject,long> Update)[] _lngUpdates = new (string, Func<SalesBinderInventoryItem, long> Func, Action<JObject, long> Update)[]
+        {
+            (InventoryFields.Quantity, x=>x.Quantity,(o,s)=>((JValue) o["item"][InventoryFields.Quantity]).Value=s),
+        };
+
+        
+        public static void DetectChanges(this SalesBinderInventoryItem potentialUpdates_, bool sendUpdates_)
+        {
+            if (!SalesBinderAPI.InventoryById.TryGetValue(potentialUpdates_.Id, out var current))
+            {
+                $"Couldn't find current inventory item to compare update item to. ItemId={potentialUpdates_.Id}"
+                    .ConsoleWriteLine();
+                return;
+            }
+
+            JObject jsonToUpdate = null;
+
+            JObject getItemToUpdate() => jsonToUpdate ??
+                                         (jsonToUpdate =
+                                             SalesBinderAPI.RetrieveJsonForInventoryItem(potentialUpdates_.Id));
+
+            _strUpdates.ForEach(u =>
+            {
+                var cv = u.Func(current);
+                var uv = u.Func(potentialUpdates_);
+
+                if (string.IsNullOrEmpty(cv) && string.IsNullOrEmpty(uv))
+                    return;
+
+                if (decimal.TryParse(cv, out var dec1) && decimal.TryParse(uv, out var dec2) && dec1 == dec2)
+                    return;
+                
+                if ( String.CompareOrdinal(cv?.Trim(), uv?.Trim()) != 0)
+                {
+                    $"Change in {current.Name}. {u.FieldName} '{cv}' to '{uv}'".ConsoleWriteLine();
+                    if(sendUpdates_)
+                        u.Update(getItemToUpdate(), uv);
+                }
+            });
+
+            _decUpdates.ForEach(u =>
+            {
+                var cv = u.Func(current);
+                var uv = u.Func(potentialUpdates_);
+
+                if (cv != uv)
+                {
+                    $"Change in {current.Name}. {u.FieldName} from '{cv}' to '{uv}'".ConsoleWriteLine();
+                    if(sendUpdates_)
+                        u.Update(getItemToUpdate(), uv);
+                }
+            });
+
+            _lngUpdates.ForEach(u =>
+            {
+                var cv = u.Func(current);
+                var uv = u.Func(potentialUpdates_);
+
+                if (cv != uv)
+                {
+                    $"{potentialUpdates_.Id} in {current.Name}. {u.FieldName} from '{cv}' to '{uv}'".ConsoleWriteLine();
+                    if(sendUpdates_)
+                        u.Update(getItemToUpdate(), uv);
+                }
+            });
+
+            if (jsonToUpdate != null && sendUpdates_)
+            {
+                SalesBinderAPI.SendItemUpdate(current.Id,jsonToUpdate.ToString());
+            }
+
+        }
+    }
+    
     public class SalesBinderContact
     {
         public static SalesBinderContact Parse(JToken token_)
@@ -469,10 +731,10 @@ namespace CKB
                 Email2 = token_.ExtractString("email_2"),
                 Modified = token_.ExtractString("modified"),
                 Created = token_.ExtractString("created"),
-                Id=token_.ExtractString("id")
+                Id = token_.ExtractString("id")
             };
         }
-        
+
         public string FirstName { get; set; }
         public string LastName { get; set; }
         public string JobTitle { get; set; }
@@ -501,7 +763,7 @@ namespace CKB
                 Modified = token_.ExtractString("modfified")
             };
         }
-        
+
         public string Name { get; set; }
         public int CustomerNumber { get; set; }
         public string OfficeEmail { get; set; }
@@ -522,22 +784,22 @@ namespace CKB
                 Name = token_.ExtractString("name"),
                 ContextId = token_.ExtractInt("context_id"),
                 TotalCost = token_.ExtractDouble("total_cost"),
-                IssueDate = token_.ExtractDate("issue_date"),
-                Created = token_.ExtractDate("created"),
-                Modified = token_.ExtractDate("modified"),
+                IssueDate = token_.ExtractDateExact("issue_date", "dd/MM/yyyy HH:mm:ss"),
+                Created = token_.ExtractDateExact("created", "dd/MM/yyyy HH:mm:ss"),
+                Modified = token_.ExtractDateExact("modified", "dd/MM/yyyy HH:mm:ss"),
                 CustomerId = token_.ExtractString("customer_id"),
-                Id=token_.ExtractString("id"),
+                Id = token_.ExtractString("id"),
             };
 
             if (ret.IssueDate == DateTime.MinValue)
                 ret.IssueDate = token_.ExtractDateExact("issue_date", "dd/MM/yyyy HH:mm:ss");
-                
+
 
             var dItems = token_["document_items"] as JArray;
 
             if (dItems != null)
                 ret.Items = dItems.Select(x => SalesBinderInvoiceItem.Parse(x)).ToArray();
-            
+
             return ret;
         }
 
@@ -550,7 +812,7 @@ namespace CKB
         public string CustomerId { get; set; }
         public DateTime Created { get; set; }
         public DateTime Modified { get; set; }
-        
+
         public SalesBinderInvoiceItem[] Items { get; set; }
     }
 
@@ -566,7 +828,7 @@ namespace CKB
                 Id = token_.ExtractString("id")
             };
         }
-        
+
         public string ItemId { get; set; }
         public double Cost { get; set; }
         public int Quantity { get; set; }
@@ -582,10 +844,10 @@ namespace CKB
                 ShortName = token_.ExtractString("short_name"),
                 LongName = token_.ExtractString("full_name")
             };
-        
+
         public string Id { get; set; }
         public string ShortName { get; set; }
         public string LongName { get; set; }
     }
-    
+
 }

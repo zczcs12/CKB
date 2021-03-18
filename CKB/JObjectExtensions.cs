@@ -131,7 +131,7 @@ namespace CKB
         public static string ExtractString(this JToken t_, string tag_)
         {
             t_.TryExtractString(tag_, out var ret);
-            return ret;
+            return ret?.Replace("\n", "").Replace("\r", "");
         }
 
         public static bool TryExtractDateExact(this JToken t_, string tag_, string format_, out DateTime out_)

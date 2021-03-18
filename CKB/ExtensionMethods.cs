@@ -3,8 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
-using System.Threading.Tasks;
+using System.Reflection;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
@@ -244,13 +243,13 @@ namespace CKB
                         ("C", "Product description", x => new CellValue(x.Book?.Name ?? string.Empty), CellValues.String),
                         ("D", "Kids or Adult", x => new CellValue(x.Book?.KidsOrAdult ?? string.Empty), CellValues.String),
                         ("E", "Type", x => new CellValue(x.Book?.ProductType ?? string.Empty), CellValues.String),
-                        ("F", "Subtype", x => new CellValue(string.Empty), CellValues.String),
+                        ("F", "Subtype", x => new CellValue(x.Book?.ProductType ?? string.Empty), CellValues.String),
                         ("G", "Author", x => new CellValue(x.Book?.Author ?? string.Empty), CellValues.String),
-                        ("H", "Full RRP", x => new CellValue(0), CellValues.Number),
+                        ("H", "Full RRP", x => new CellValue(x.Book?.FullRRP ?? string.Empty), CellValues.Number),
                         ("I", "Style", x => new CellValue(x.Book?.Style ?? string.Empty), CellValues.String),
                         ("J", "Publisher", x => new CellValue(x.Book?.Publisher ?? string.Empty), CellValues.String),
                         ("K", "Clearance?", x => new CellValue(string.Empty), CellValues.String),
-                        ("L", "Case size", x => new CellValue(string.Empty), CellValues.String),
+                        ("L", "Case size", x => new CellValue(x.Book?.PackSize ?? string.Empty), CellValues.String),
                         ("M", "VAT Rate", x => new CellValue(x.Book?.VAT ?? string.Empty), CellValues.String),
                         ("N", "ON", x => new CellValue(string.Empty), CellValues.String),
                         ("O", "Territory Restrictions", x => new CellValue(string.Empty), CellValues.String),
@@ -369,6 +368,17 @@ namespace CKB
             }
 
             return null;
+        }
+
+        public static int ToInt(this IConvertible d) => Convert.ToInt32(d);
+
+        public static int ToEpochTime(this DateTime date_) => (date_ - new DateTime(1970, 1, 1)).TotalSeconds.ToInt();
+
+        public static string GetTextFromEmbeddedResource(string name_)
+        {
+            using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(name_))
+            using (var reader = new StreamReader(stream))
+                return reader.ReadToEnd();
         }
     }
 }
