@@ -104,10 +104,12 @@ namespace CKB
                                              !string.IsNullOrEmpty($"{lookup.ArgumentDictionary[key_]}");
 
             string getArgument(string key_) => hasArgument(key_) ? $"{lookup.ArgumentDictionary[key_]}" : null;
-            
-            string encaseStringWithComma(string input_) => !string.IsNullOrEmpty(input_) && input_.Contains(',')
-                ? $"\"{input_}\""
-                : input_;
+
+            string encaseStringWithComma(string input_) =>
+                ((!string.IsNullOrEmpty(input_) && input_.Contains(','))
+                 || (!string.IsNullOrEmpty(input_) && int.TryParse(input_, out var _)))
+                    ? $"\"{input_}\""
+                    : input_;
             
             if(SalesBinderInventoryDownload)
                 SalesBinderAPI.RetrieveAndSaveInventory(topup_:!Force);
@@ -145,15 +147,6 @@ namespace CKB
 
                     if (set.OnlyCurrent)
                         list = list.Where(x => x.Quantity > 0).ToArray();
-
-                    var props = typeof(SalesBinderInventoryItem).GetProperties(BindingFlags.Instance |
-                                                                               BindingFlags.GetProperty |
-                                                                               BindingFlags.Public)
-                        .Where(x => !x.Name.Contains("Image"))
-                        .ToArray();
-
-                    var sb = new StringBuilder();
-                    sb.AppendLine(string.Join(",", props.Select(p => p.Name)));
 
                     using (var writer = new StreamWriter(outputFilePath))
                     using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
