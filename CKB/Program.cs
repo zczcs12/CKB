@@ -75,6 +75,9 @@ namespace CKB
         [Argument('#',"gsli","Generate stock list from inventory => xlsx")]
         private static bool GenerateStockListFromInventory { get; set; }
 
+        [Argument('*',"sbnq","Sales Binder report negative quantities")]
+        private static bool SalesBinderReportNegativeQuantities { get; set; }
+        
         static void Main(string[] args)
         {
             Arguments.Populate();
@@ -355,7 +358,6 @@ namespace CKB
                         if(!string.IsNullOrEmpty(x.Image))
                             SalesBinderAPI.UploadImage(x.Item.BarCode,x.Image);
                     });
-                
             }
             
             if (GenerateStockListFromInventory)
@@ -383,6 +385,19 @@ namespace CKB
                 }
             }
 
+            if (SalesBinderReportNegativeQuantities)
+            {
+                var negs = SalesBinderAPI.Inventory.Where(x => x.Quantity < 0);
+                
+                if(!negs.Any())
+                    "No negative quantities".ConsoleWriteLine();
+                else
+                {
+                    negs.Select(x=>new []{$"{x.Name}",$"{x.BarCode}",$"{x.Quantity}"})
+                        .FormatIntoColumns(new[] {"Name","Barcode","Quantity"})
+                        .ConsoleWriteLine();
+                }
+            }
 
             if (SalesBinderInventoryUpdate)
             {
