@@ -69,7 +69,7 @@ namespace CKB
         [Argument('q',"kru","Try to topup keepa records")]
         private static bool TopupKeepaRecords { get; set; }
         
-        // [Argument('t', "test", "Test code")]
+        [Argument('t', "test", "Test code")]
         private static bool Test { get; set; }
         
         [Argument('#',"gsli","Generate stock list from inventory => xlsx")]
@@ -138,7 +138,7 @@ namespace CKB
                         return;
                     }
 
-                    var list = SalesBinderAPI.Inventory;
+                    var list = SalesBinderAPI.RetrieveAndSaveInventory(true);
 
                     if (set.OnlyCurrent)
                         list = list.Where(x => x.Quantity > 0).ToArray();
@@ -366,7 +366,7 @@ namespace CKB
                 }
                 else
                 {
-                    var inventory = SalesBinderAPI.Inventory;
+                    var inventory = SalesBinderAPI.RetrieveAndSaveInventory(true);
 
                     if (!inventory.Any())
                     {
@@ -375,7 +375,9 @@ namespace CKB
                     }
                     else
                     {
-                        inventory.Where(x=>x.Quantity>0).Select(x => (x.BarCode, ExtensionMethods.FindImagePath(x.BarCode), x))
+                        inventory.Where(x=>x.Quantity>0)
+                            .Select(x => (BarCode:x.BarCode, Image:ExtensionMethods.FindImagePath(x.BarCode), Item:x))
+                            .OrderByDescending(x=>x.Item,new StockListOrderer())
                             .WriteStockListFile(getArgument("gsli"));
                     }
                 }
@@ -384,84 +386,29 @@ namespace CKB
 
             if (SalesBinderInventoryUpdate)
             {
-                SalesBinderInventoryItem[] recs;
-                
-                using (var reader = new StreamReader("e:\\ste\\list.csv"))
-                using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
+                if (!hasArgument("gsiu"))
                 {
-                    recs = csv.GetRecords<SalesBinderInventoryItem>().ToArray();
+                    "You need to supply an argument to --gsiu which is the path to the csv file that containst the updates".ConsoleWriteLine();
                 }
-                
-                recs.ForEach(potentialUpdate => { potentialUpdate.DetectChanges(Force); });
+                else
+                {
+                    SalesBinderInventoryItem[] recs;
+
+                    using (var reader = new StreamReader(getArgument("gsiu")))
+                    using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
+                    {
+                        recs = csv.GetRecords<SalesBinderInventoryItem>().ToArray();
+                    }
+
+                    recs.ForEach(potentialUpdate => { potentialUpdate.DetectChanges(Force); });
+                }
             }
             
             if (Test)
             {
-                // var item = SalesBinderAPI.Inventory.FirstOrDefault(x =>
-                //     x.Id.Equals("5e5920bf-8dec-4c7e-81d2-7f783f71d8bf"));
-
-                 // var c = SalesBinderAPI.RetrieveJsonForInventoryItem("5c800e24-6c7c-4416-a3a5-32fe3f71d8bf");
-                 // c.ToString().ConsoleWriteLine();
-
-                 // SalesBinderAPI.UnitsOfMeasure.ForEach(x => x.LongName.ConsoleWriteLine());
-                 
-                 
-                // c.ToString().ConsoleWriteLine();
-                // var blah = c["item"]["quantity"];
-                // var cust = c["item"]["item_details"];
-                //
-                // ((JValue) c["item"]["quantity"]).Value = 100;
-                //
-                // var custArry = (JArray) cust;
-                //
-                // c.ToString().ConsoleWriteLine();
-
-                // var itemObject = new JObject();
-                // var p = new JObject(new JProperty("item",itemObject));
-                // itemObject.Add(new JProperty("quantity",100));
-                // itemObject.Add(new JProperty("name","Ben is the best"));
-                // p.ToString().ConsoleWriteLine();
-
-                
-                // SalesBinderAPI.CustomFieldNameToId.ForEach(x=>$"{x.Key} => {x.Value}".ConsoleWriteLine());
-                
-                // if(true)
-                // {
-                //     SalesBinderInventoryItem[] recs;
-                //
-                //     using (var reader = new StreamReader("e:\\ste\\list.csv"))
-                //     using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
-                //     {
-                //         recs = csv.GetRecords<SalesBinderInventoryItem>().ToArray();
-                //     }
-                //
-                //     recs.ForEach(potentialUpdate => { potentialUpdate.DetectChanges(); });
-                // }
-
-                // SalesBinderAPI.Inventory.GroupBy(x=>x.BarCode)
-                //     .Where(x=>x.Count()>1)
-                //     .SelectMany(x=>x)
-                //     .Select(x=>new [] {$"{x.Name}",$"{x.BarCode}",$"{x.Id}"})
-                //     .FormatIntoColumns(new[] {"Name","BarCode","ItemId"})
-                //     .ConsoleWriteLine();
-                // SalesBinderAPI.UpdateQuantity("9781786484734", 1);
-                // SalesBinderAPI.UnitsOfMeasure.ForEach(x=>$"{x.Key} = {x.Value}".ConsoleWriteLine());
-
-                // SalesBinderAPI.Inventory.Where(x => x.BarCode.Length == 13 && x.Quantity > 0)
-                //     .ForEach(x=>BlackwellsAPI.TryGetImageForIdentifier(x.BarCode));
-
-                // SalesBinderAPI.UnitsOfMeasure.ForEach(x => $"{x.Id} => {x.ShortName}".ConsoleWriteLine());
-
-                // SalesBinderAPI.Inventory.Where(x=>x.HasImageSaved()==false && x.Quantity>0)
-                //     .ForEach(x=>
-                //     {
-                //         var image = ExtensionMethods.FindImagePath(x.BarCode);
-                //         
-                //         $"{x.BarCode} @ {image}".ConsoleWriteLine();
-                //
-                //         // if("9780007968671".Equals(x.BarCode))
-                //         //     SalesBinderAPI.UploadImage(x.BarCode,image);
-                //     });
+                 var c = SalesBinderAPI.RetrieveJsonForInventoryItem("5b460759-5764-4a88-b3c5-2d8c3f71d8bf");
+                 c.ToString().ConsoleWriteLine();
+                 File.WriteAllText(@"e:\temp.json",c.ToString());
             }
         }
     }

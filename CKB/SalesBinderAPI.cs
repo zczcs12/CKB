@@ -37,10 +37,9 @@ namespace CKB
         private static string InventoryItemsDirectory = $@"{SAVE_PATH_ROOT}\inventoryrecords";
         private static string ImageDirectory = $@"{SAVE_PATH_ROOT}\images";
 
-
-
         #region Inventory
 
+        
         private static string InventoryInvidualItemPath(string item_id_) =>
             $@"{InventoryItemsDirectory}\{item_id_}.json";
 
@@ -155,7 +154,7 @@ namespace CKB
         private static Lazy<WebClient> _webClient = new Lazy<WebClient>(() => new WebClient());
 
 
-        public static void RetrieveAndSaveInventory(bool topup_)
+        public static IEnumerable<SalesBinderInventoryItem> RetrieveAndSaveInventory(bool topup_)
             => retrieveAndSave(() =>
             {
                 var current = Inventory;
@@ -169,6 +168,7 @@ namespace CKB
                 if (!topup.Any()) return current;
 
                 var currentD = current.ToDictionary(x => x.Id, x => x);
+                
                 topup.ForEach(x => currentD[x.Id] = x);
 
                 return currentD.Values;
@@ -257,11 +257,12 @@ namespace CKB
 
             }, InvoicesFilePath);
 
-        private static void retrieveAndSave<T>(Func<IEnumerable<T>> func_, string filePath_)
+        private static IEnumerable<T> retrieveAndSave<T>(Func<IEnumerable<T>> func_, string filePath_)
         {
-            var allItems = func_();
+            var allItems = func_().ToArray();
             var txt = JsonConvert.SerializeObject(allItems.ToArray(), Formatting.None);
             File.WriteAllText(filePath_, txt);
+            return allItems;
         }
 
 
@@ -468,6 +469,7 @@ namespace CKB
                 {InventoryCustomFields.MaterialComposition, (i, v) => i.MaterialComposition = v},
                 {InventoryCustomFields.Clearance, (i, v) => i.Clearance = v},
                 {InventoryCustomFields.BinLocaiton, null},
+                {InventoryCustomFields.Rating, (i, v) => i.Rating = double.TryParse(v,out var val)? val : default(double?)}
             };
 
 
@@ -520,6 +522,8 @@ namespace CKB
         [Index(21)]
         public string MaterialComposition { get; set; }
         [Index(22)]
+        public double? Rating { get; set; }
+        [Index(23)]
         public string Id { get; set; }
         [Ignore]
         public string ImageURLSmall { get; set; }
@@ -547,6 +551,7 @@ namespace CKB
         public const string MaterialComposition = "Material Composition";
         public const string Clearance = "Clearance";
         public const string BinLocaiton = "Bin Location";
+        public const string Rating = "Rating";
     }
 
     public static class InventoryFields
@@ -850,4 +855,37 @@ namespace CKB
         public string LongName { get; set; }
     }
 
+    public class StockListOrderer : IComparer<SalesBinderInventoryItem>
+    {
+        static bool understandClearance(string given_)
+        {
+            switch (given_.Trim().ToLower())
+            {
+                case "yes":
+                    case "y":
+                    case "true":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+        static bool isClearance(SalesBinderInventoryItem item_)
+            => string.IsNullOrEmpty(item_?.Clearance) ? false : understandClearance(item_.Clearance);
+        public int Compare(SalesBinderInventoryItem x, SalesBinderInventoryItem y)
+        {
+            var xClearance = isClearance(x);
+            var yClearnce = isClearance(y);
+
+            if (xClearance != yClearnce)
+                return xClearance.CompareTo(yClearnce);
+
+            var xRating = x.Rating ?? 0;
+            var yRating = y.Rating ?? 0;
+
+            if (xRating != yRating)
+                return xRating.CompareTo(yRating);
+
+            return (x.Name ?? string.Empty).CompareTo(y.Name ?? string.Empty);
+        }
+    }
 }

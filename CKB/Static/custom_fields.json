@@ -64,6 +64,10 @@
     {
       "custom_field_id": "604fb375-b148-498a-8648-0f410a8e002a",
       "name": "Condition"
+    },
+    {
+      "custom_field_id": "5f92c34d-c738-4d8b-aae8-559f3f71d8bf",
+      "name": "Rating"
     }
   ]
 }
