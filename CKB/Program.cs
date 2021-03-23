@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Text;
 using CsvHelper;
 using CsvHelper.Configuration;
+using DocumentFormat.OpenXml.Spreadsheet;
 using Utility.CommandLine;
 
 namespace CKB
@@ -48,7 +49,7 @@ namespace CKB
         [Argument('u', "sbimu","Sales Binder Image Upload (find for inventory without one)")]
         private static bool SalesBinderFindAndUploadImagesForInventoryWithoutAnImage { get; set; }
 
-        [Argument('j',"kle","Keepa lookup ensure. Lookup given IDs in local keepa records. Try to update any missing.")]
+        // [Argument('j',"kle","Keepa lookup ensure. Lookup given IDs in local keepa records. Try to update any missing.")]
         private static bool KeepaLookupEnsure { get; set; }
         
         [Argument('k',"force","Force updates")]
@@ -57,8 +58,11 @@ namespace CKB
         [Argument('/',"klp","Keepa lookup prime records.  Try to get a keepa record for anthing we've not tried before.")]
         private static bool KeepaLookupPrimeRecords { get; set; }
         
-        [Argument('l',"klri","Keepa lookup refresh inventory - if not updated in the last 24 hours")]
+        // [Argument('l',"klri","Keepa lookup refresh inventory - if not updated in the last 24 hours")]
         private static bool KeepaLookupRefreshCurrentInventory { get; set; }
+        
+        [Argument(')',"ka","Keepa augment (the salesbinder csv list)")]
+        private static bool KeepaAugmentList { get; set; }
         
         // [Argument('m',"gwl","Generate warehouse list xlsx from given csv (id,qty) file")]
         private static bool GenerateListForWarehouse { get; set; }
@@ -66,7 +70,7 @@ namespace CKB
         [Argument('n', "gsr", "Generate sales report csv")]
         private static bool GenerateSalesReport { get; set; }
         
-        [Argument('q',"kru","Try to topup keepa records")]
+        // [Argument('q',"kru","Try to topup keepa records")]
         private static bool TopupKeepaRecords { get; set; }
         
         [Argument('t', "test", "Test code")]
@@ -147,6 +151,21 @@ namespace CKB
 
                     if (set.OnlyCurrent)
                         list = list.Where(x => x.Quantity > 0).ToArray();
+
+                    if (KeepaAugmentList)
+                    {
+                        list.Where(x=>!string.IsNullOrEmpty(x.BarCode) &&
+                                      (string.IsNullOrEmpty(x.ProductType2) || string.IsNullOrEmpty(x.ProductType3)))
+                            .Select(x=>(Item:x,Keepa:KeepaAPI.GetRecordForIdentifier(x.BarCode)))
+                            .Where(x=>x.Keepa!=null && x.Keepa.CategoryTree!=null)
+                            .ForEach(l =>
+                            {
+                                if (string.IsNullOrEmpty(l.Item.ProductType2) && l.Keepa.CategoryTree.Length > 4)
+                                    l.Item.ProductType2 = l.Keepa.CategoryTree[4];
+                                if (string.IsNullOrEmpty(l.Item.ProductType3) && l.Keepa.CategoryTree.Length > 5)
+                                    l.Item.ProductType3 = l.Keepa.CategoryTree[5];
+                            });
+                    }
 
                     using (var writer = new StreamWriter(outputFilePath))
                     using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
