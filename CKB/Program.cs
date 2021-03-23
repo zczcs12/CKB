@@ -40,6 +40,9 @@ namespace CKB
         [Argument('j',"sbiu","Sales Binder Inventory Update (from file)")]
         private static bool SalesBinderInventoryUpdate { get; set; }
         
+        // [Argument('£',"sbci","Sales Binder Inventory Create (from csv of barcodes)")]
+        private static bool SalesBinderCreateInventory { get; set; }
+        
         // [Argument('v',"sbsd","Sales Binder Settings Download")]
         private static bool SalesBinderSettingsDownload { get; set; }
 
@@ -154,12 +157,15 @@ namespace CKB
 
                     if (KeepaAugmentList)
                     {
-                        list.Where(x=>!string.IsNullOrEmpty(x.BarCode) &&
-                                      (string.IsNullOrEmpty(x.ProductType2) || string.IsNullOrEmpty(x.ProductType3)))
+                        list.Where(x=>!string.IsNullOrEmpty(x.BarCode))
                             .Select(x=>(Item:x,Keepa:KeepaAPI.GetRecordForIdentifier(x.BarCode)))
                             .Where(x=>x.Keepa!=null && x.Keepa.CategoryTree!=null)
                             .ForEach(l =>
                             {
+                                if (string.IsNullOrEmpty(l.Item.Author))
+                                    l.Item.Author = l.Keepa.Author;
+                                if (string.IsNullOrEmpty(l.Item.Publisher))
+                                    l.Item.Publisher = l.Keepa.Manufacturer;
                                 if (string.IsNullOrEmpty(l.Item.ProductType2) && l.Keepa.CategoryTree.Length > 4)
                                     l.Item.ProductType2 = l.Keepa.CategoryTree[4];
                                 if (string.IsNullOrEmpty(l.Item.ProductType3) && l.Keepa.CategoryTree.Length > 5)
@@ -428,6 +434,52 @@ namespace CKB
                     }
 
                     recs.ForEach(potentialUpdate => { potentialUpdate.DetectChanges(Force); });
+                }
+            }
+
+            if (SalesBinderCreateInventory)
+            {
+                if (!hasArgument("sbci") || !File.Exists(getArgument("sbci")))
+                {
+                    "You need to supply a valid path to a file in which the new inventory listed"
+                        .ConsoleWriteLine();
+                }
+                else
+                {
+                    var lines = File.ReadLines(getArgument("sbci"));
+
+                    lines.Select(x=>x.Trim())
+                        .GroupBy(l=>SalesBinderAPI.InventoryByBarcode.TryGetValue(l,out var _))
+                        .OrderBy(x=>x.Key)
+                        .Reverse()
+                        .ForEach(x =>
+                        {
+                            // exists already if true
+                            if (x.Key)
+                            {
+                                x.ForEach(l =>
+                                {
+                                    $"Product with barcode {l} already exists (Name={SalesBinderAPI.InventoryByBarcode[l].Name})"
+                                        .ConsoleWriteLine();
+                                });
+                            }
+                            else
+                            {
+                                var recs = KeepaAPI.GetDetailsForIdentifiers(x.ToArray());
+                    
+                                x.ForEach(l =>
+                                {
+                                    if (!recs.TryGetValue(l, out var rec))
+                                        return;
+                        
+                                    SalesBinderAPI.CreateInventory(l,rec);
+                                });
+                                
+                            }
+                        });
+                    
+                    
+
                 }
             }
             

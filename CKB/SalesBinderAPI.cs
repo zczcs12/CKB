@@ -237,6 +237,38 @@ namespace CKB
                 : retrievePaginated("documents", "documents", x => SalesBinderInvoice.Parse(x),
                     "&contextId=5&pageLimit=200");
 
+        public static void CreateInventory(string barCode_, KeepaRecord useTheseDetails_)
+        {
+            var toAdd = new JObject(
+                new JProperty("item", new JObject(
+                    new JProperty(InventoryFields.Name, useTheseDetails_.Title),
+                    new JProperty("description", useTheseDetails_.Description),
+                    new JProperty(InventoryFields.SKU, barCode_),
+                    new JProperty(InventoryFields.BarCode, barCode_),
+                    new JProperty("multiple", 1),
+                    new JProperty("threshold", 0),
+                    new JProperty(InventoryFields.Cost, 0.0),
+                    new JProperty(InventoryFields.Price, 0.0),
+                    new JProperty(InventoryFields.Quantity, 0),
+                    new JProperty("category_id", "5b1aafe1-ed18-43b2-b2dd-2ed40a8e0005"),
+                    new JProperty("item_details", new JArray
+                    {
+                        new JObject(
+                            new JProperty("custom_field_id", InventoryCustomFields.Author),
+                            new JProperty("value", useTheseDetails_.Author)
+                        ),
+                        new JObject(
+                            new JProperty("custom_field_id", InventoryCustomFields.Publisher),
+                            new JProperty("value", useTheseDetails_.Manufacturer)
+                        ),
+                    })
+                )));
+
+            var response = postJson("items.json", toAdd.ToString());
+            
+            $"{JObject.Parse(response)}".ConsoleWriteLine();
+        }
+        
         public static void RetrieveAndSaveInvoices(bool topup_)
             => retrieveAndSave(() =>
             {
@@ -340,6 +372,15 @@ namespace CKB
             var httpContent = new StringContent(json_, Encoding.UTF8, "application/json");
             var uri = new Uri($"{URI_ROOT}{urlEnding_}");
             var response = _client.Value.PutAsync(uri, httpContent).Result;
+            _lastRequestTime = DateTime.Now;
+            return response?.Content.ReadAsStringAsync().Result;
+        }
+
+        private static string postJson(string urlEnding_, string json_)
+        {
+            var httpContent = new StringContent(json_, Encoding.UTF8, "application/json");
+            var uri = new Uri($"{URI_ROOT}{urlEnding_}");
+            var response = _client.Value.PostAsync(uri, httpContent).Result;
             _lastRequestTime = DateTime.Now;
             return response?.Content.ReadAsStringAsync().Result;
         }

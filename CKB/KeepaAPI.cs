@@ -71,19 +71,16 @@ namespace CKB
 
         public static IDictionary<string,KeepaRecord> GetDetailsForIdentifiers(string[] identifier_, bool forceRefresh_=false, bool ensureImagesToo_=true)
         {
-            string[] toLookup = identifier_;
+            var toLookup = identifier_;
 
-            bool makeCall = true;
+            var makeCall = true;
             
             if (!forceRefresh_)
             {
                 var subset = identifier_.Where(x => !HaveLocalRecord(x));
 
                 if (!subset.Any())
-                {
-                    "Nothing to do - have records for all given identifiers".ConsoleWriteLine();
                     makeCall = false;
-                }
                 else
                     toLookup = subset.ToArray();
             }
