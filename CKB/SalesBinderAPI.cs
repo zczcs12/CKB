@@ -178,11 +178,11 @@ namespace CKB
         public static IEnumerable<SalesBinderInventoryItem> RetrieveInventory(DateTime? since_ = null)
             => since_.HasValue
                 ? retrievePaginated("items", "items", SalesBinderInventoryItem.Parse,
-                    $"&pageLimit=100&modifiedSince={since_.Value.ToEpochTime()}")
-                : retrievePaginated("items", "items", SalesBinderInventoryItem.Parse, "&pageLimit=100&");
+                    $"&pageLimit=100&modifiedSince={since_.Value.ToEpochTime()}", false)
+                : retrievePaginated("items", "items", SalesBinderInventoryItem.Parse, "&pageLimit=100&", true);
 
         private static IEnumerable<T> retrievePaginated<T>(string apiName_, string groupTokenName_,
-            Func<JToken, T> creator_, string optionalArgs_ = null)
+            Func<JToken, T> creator_, string optionalArgs_ = null, bool log_=true)
         {
             var allItems = new List<T>();
 
@@ -205,7 +205,8 @@ namespace CKB
                 {
                     var totalPages = int.Parse(pagesToken.ToString());
 
-                    Console.WriteLine($"Processed page {pageNumber} of {totalPages} of {apiName_}");
+                    if(log_)
+                        Console.WriteLine($"Processed page {pageNumber} of {totalPages} of {apiName_}");
 
                     if (pageNumber >= totalPages)
                         stop = true;
@@ -471,15 +472,22 @@ namespace CKB
             {
             }
 
-            var details = token_["item_details"] as JArray;
-
-            foreach (var det in details)
+            try
             {
-                var field = det["custom_field"]["name"].ToString();
-                var val = det["value"].ToString();
+                if(token_["item_details"] is JArray details)
+                    foreach (var det in details)
+                    {
+                        var field = det["custom_field"]["name"].ToString();
+                        var val = det["value"].ToString();
 
-                if (_customFields.TryGetValue(field, out var f))
-                    f?.Invoke(ret, val);
+                        if (_customFields.TryGetValue(field, out var f))
+                            f?.Invoke(ret, val);
+                    }
+                else
+                    "blah".ConsoleWriteLine();
+            }
+            catch
+            {
             }
 
             var images = token_["images"];
@@ -694,9 +702,11 @@ namespace CKB
         };
 
         
-        public static void DetectChanges(this SalesBinderInventoryItem potentialUpdates_, bool sendUpdates_)
+        public static void DetectChanges(this SalesBinderInventoryItem potentialUpdates_, IEnumerable<SalesBinderInventoryItem> currentInventory_, bool sendUpdates_)
         {
-            if (!SalesBinderAPI.InventoryById.TryGetValue(potentialUpdates_.Id, out var current))
+            var currentAsDictionary = currentInventory_.ToDictionary(x => x.Id, x => x);
+            
+            if (!currentAsDictionary.TryGetValue(potentialUpdates_.Id, out var current))
             {
                 $"Couldn't find current inventory item to compare update item to. ItemId={potentialUpdates_.Id}"
                     .ConsoleWriteLine();

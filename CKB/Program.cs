@@ -141,13 +141,13 @@ namespace CKB
                 .Where(x => x.Do)
                 .ForEach(set =>
                 {
-                    var outputFilePath = getArgument(set.Arg);
-
-                    if (string.IsNullOrEmpty(outputFilePath))
+                    var targetPath = getArgument(set.Arg);
+                    
+                    if (string.IsNullOrEmpty(targetPath))
                     {
-                        $"You need to supply an output filepath after '--{set.Arg}' (which should be an csv) to write the list to"
+                        "Where should the inventory list be saved to (fullpath to csv)?: "
                             .ConsoleWriteLine();
-                        return;
+                        targetPath = Console.ReadLine();
                     }
 
                     var list = SalesBinderAPI.RetrieveAndSaveInventory(true);
@@ -173,7 +173,7 @@ namespace CKB
                             });
                     }
 
-                    using (var writer = new StreamWriter(outputFilePath))
+                    using (var writer = new StreamWriter(targetPath))
                     using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
                     {
                         csv.WriteRecords(list
@@ -290,9 +290,15 @@ namespace CKB
 
             if (GenerateSalesReport)
             {
-                if (!hasArgument("gsr"))
-                    "You need to supply an output filepath (which should be an csv) to write the list to".ConsoleWriteLine();
-                else if (SalesBinderAPI.Invoices == null)
+                var targetFile = getArgument("gsr");
+
+                if (string.IsNullOrEmpty(targetFile))
+                {
+                    "Where should the salesreport (csv) be saved to (full path)? :".ConsoleWriteLine();
+                    targetFile = Console.ReadLine();
+                }
+
+                if (SalesBinderAPI.Invoices == null)
                     "No invoices found.  Have you downloaded them yet?".ConsoleWriteLine();
                 else if (SalesBinderAPI.Inventory == null)
                     "No inventory found.  Have you downloaded them yet?".ConsoleWriteLine();
@@ -347,7 +353,7 @@ namespace CKB
                     var sb = new StringBuilder();
                     sb.AppendLine(setups.Select(s => s.Title).ToArray().Join(","));
                     rows.ForEach(row=>sb.AppendLine(setups.Select(s=>encaseStringWithComma(s.Func(row))).ToArray().Join(",")));
-                    File.WriteAllText(getArgument("gsr"),sb.ToString());
+                    File.WriteAllText(targetFile,sb.ToString());
                 }
             }
 
@@ -380,26 +386,27 @@ namespace CKB
             
             if (GenerateStockListFromInventory)
             {
-                if (!hasArgument("gsli"))
+                var targetFile = getArgument("gsli");
+
+                if (string.IsNullOrEmpty(targetFile))
                 {
-                    "You need to supply an output filepath (which should be an xlsx) to write the list to".ConsoleWriteLine();
+                    "Where should the stocklist be saved to (full path to xlsx)? :".ConsoleWriteLine();
+                    targetFile = Console.ReadLine();
+                }
+
+                var inventory = SalesBinderAPI.RetrieveAndSaveInventory(true);
+
+                if (!inventory.Any())
+                {
+                    $"There is no salesbinder inventory locally.  run 'CKB.exe --sbid' to download inventory before trying to generate a stock list"
+                        .ConsoleWriteLine();
                 }
                 else
                 {
-                    var inventory = SalesBinderAPI.RetrieveAndSaveInventory(true);
-
-                    if (!inventory.Any())
-                    {
-                        $"There is no salesbinder inventory locally.  run 'CKB.exe --sbid' to download inventory before trying to generate a stock list"
-                            .ConsoleWriteLine();
-                    }
-                    else
-                    {
-                        inventory.Where(x=>x.Quantity>0)
-                            .Select(x => (BarCode:x.BarCode, Image:ExtensionMethods.FindImagePath(x.BarCode), Item:x))
-                            .OrderByDescending(x=>x.Item,new StockListOrderer())
-                            .WriteStockListFile(getArgument("gsli"));
-                    }
+                    inventory.Where(x => x.Quantity > 0)
+                        .Select(x => (BarCode: x.BarCode, Image: ExtensionMethods.FindImagePath(x.BarCode), Item: x))
+                        .OrderByDescending(x => x.Item, new StockListOrderer())
+                        .WriteStockListFile(getArgument(targetFile));
                 }
             }
 
@@ -419,22 +426,30 @@ namespace CKB
 
             if (SalesBinderInventoryUpdate)
             {
-                if (!hasArgument("gsiu"))
-                {
-                    "You need to supply an argument to --gsiu which is the path to the csv file that containst the updates".ConsoleWriteLine();
-                }
-                else
-                {
-                    SalesBinderInventoryItem[] recs;
+                var sourcePath = getArgument("sbiu");
 
-                    using (var reader = new StreamReader(getArgument("gsiu")))
-                    using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
-                    {
-                        recs = csv.GetRecords<SalesBinderInventoryItem>().ToArray();
-                    }
+                while (string.IsNullOrEmpty(sourcePath) || !File.Exists(sourcePath))
+                {
+                    "Path to csv file with updates (full path)?:"
+                        .ConsoleWriteLine();
 
-                    recs.ForEach(potentialUpdate => { potentialUpdate.DetectChanges(Force); });
+                    sourcePath = Console.ReadLine();
+                    
+                    if("exist".Equals(sourcePath) || "quit".Equals(sourcePath))
+                        Environment.Exit(0);
                 }
+
+                var currentInventory = SalesBinderAPI.RetrieveAndSaveInventory(true);
+
+                SalesBinderInventoryItem[] recs;
+
+                using (var reader = new StreamReader(sourcePath))
+                using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
+                {
+                    recs = csv.GetRecords<SalesBinderInventoryItem>().ToArray();
+                }
+
+                recs.ForEach(potentialUpdate => { potentialUpdate.DetectChanges(currentInventory, Force); });
             }
 
             if (SalesBinderCreateInventory)
