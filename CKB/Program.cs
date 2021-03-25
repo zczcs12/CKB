@@ -406,7 +406,7 @@ namespace CKB
                     inventory.Where(x => x.Quantity > 0)
                         .Select(x => (BarCode: x.BarCode, Image: ExtensionMethods.FindImagePath(x.BarCode), Item: x))
                         .OrderByDescending(x => x.Item, new StockListOrderer())
-                        .WriteStockListFile(getArgument(targetFile));
+                        .WriteStockListFile(targetFile);
                 }
             }
 
