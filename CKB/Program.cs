@@ -427,6 +427,7 @@ namespace CKB
             if (SalesBinderInventoryUpdate)
             {
                 var sourcePath = getArgument("sbiu");
+                bool doIt = true;
 
                 while (string.IsNullOrEmpty(sourcePath) || !File.Exists(sourcePath))
                 {
@@ -449,7 +450,33 @@ namespace CKB
                     recs = csv.GetRecords<SalesBinderInventoryItem>().ToArray();
                 }
 
-                recs.ForEach(potentialUpdate => { potentialUpdate.DetectChanges(currentInventory, Force); });
+                // check to make sure no barcodes or SKUs have pluses in them
+                if (recs.SelectMany(r => new[] {r.BarCode, r.SKU})
+                    .Where(x => !string.IsNullOrEmpty(x))
+                    .Any(x => x.Contains('+')))
+                {
+                    "Some of the SKUs or Barcodes in the file have a '+' in them.  Did Excel format screw up the formatting?"
+                        .ConsoleWriteLine();
+                    doIt = false;
+                }
+
+                if (doIt)
+                {
+                    var toUpdate = recs.Where(potentialUpdate =>
+                        potentialUpdate.DetectChanges(currentInventory, false));
+
+                    if (!toUpdate.Any())
+                        "No changes found.".ConsoleWriteLine();
+                    else if (Force)
+                    {
+                        Console.Write("Enter 'yes' to make the changes:");
+                        var entered = Console.ReadLine();
+                        if (String.Compare("yes", entered.Trim(), StringComparison.OrdinalIgnoreCase) == 0)
+                            toUpdate.ForEach(r => r.DetectChanges(currentInventory, true));
+                        else
+                            "Changed aborted.".ConsoleWriteLine();
+                    }
+                }
             }
 
             if (SalesBinderCreateInventory)

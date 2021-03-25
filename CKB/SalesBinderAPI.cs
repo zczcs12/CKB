@@ -702,7 +702,7 @@ namespace CKB
         };
 
         
-        public static void DetectChanges(this SalesBinderInventoryItem potentialUpdates_, IEnumerable<SalesBinderInventoryItem> currentInventory_, bool sendUpdates_)
+        public static bool DetectChanges(this SalesBinderInventoryItem potentialUpdates_, IEnumerable<SalesBinderInventoryItem> currentInventory_, bool sendUpdates_)
         {
             var currentAsDictionary = currentInventory_.ToDictionary(x => x.Id, x => x);
             
@@ -710,10 +710,11 @@ namespace CKB
             {
                 $"Couldn't find current inventory item to compare update item to. ItemId={potentialUpdates_.Id}"
                     .ConsoleWriteLine();
-                return;
+                return false;
             }
 
             JObject jsonToUpdate = null;
+            var changeFound = false;
 
             JObject getItemToUpdate() => jsonToUpdate ??
                                          (jsonToUpdate =
@@ -732,9 +733,11 @@ namespace CKB
                 
                 if ( String.CompareOrdinal(cv?.Trim(), uv?.Trim()) != 0)
                 {
-                    $"Change in {current.Name}. {u.FieldName} '{cv}' to '{uv}'".ConsoleWriteLine();
+                    changeFound = true;
                     if(sendUpdates_)
                         u.Update(getItemToUpdate(), uv);
+                    else
+                        $"\"{current.Name}\": {u.FieldName} field has been changed from '{cv}' to '{uv}'".ConsoleWriteLine();    
                 }
             });
 
@@ -745,9 +748,11 @@ namespace CKB
 
                 if (cv != uv)
                 {
-                    $"Change in {current.Name}. {u.FieldName} from '{cv}' to '{uv}'".ConsoleWriteLine();
+                    changeFound = true;
                     if(sendUpdates_)
                         u.Update(getItemToUpdate(), uv);
+                    else
+                        $"\"{current.Name}\": {u.FieldName} field has been changed from '{cv}' to '{uv}'".ConsoleWriteLine();
                 }
             });
 
@@ -758,9 +763,11 @@ namespace CKB
 
                 if (cv != uv)
                 {
-                    $"{potentialUpdates_.Id} in {current.Name}. {u.FieldName} from '{cv}' to '{uv}'".ConsoleWriteLine();
-                    if(sendUpdates_)
+                    changeFound = true;
+                    if (sendUpdates_)
                         u.Update(getItemToUpdate(), uv);
+                    else
+                        $"\"{current.Name}\": {u.FieldName} field has been changed from '{cv}' to '{uv}'".ConsoleWriteLine();
                 }
             });
 
@@ -769,6 +776,7 @@ namespace CKB
                 SalesBinderAPI.SendItemUpdate(current.Id,jsonToUpdate.ToString());
             }
 
+            return changeFound;
         }
     }
     
