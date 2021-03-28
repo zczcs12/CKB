@@ -412,7 +412,8 @@ namespace CKB
 
             if (SalesBinderReportNegativeQuantities)
             {
-                var negs = SalesBinderAPI.Inventory.Where(x => x.Quantity < 0);
+                var negs = SalesBinderAPI.RetrieveAndSaveInventory(true)
+                    .Where(x => x.Quantity < 0);
                 
                 if(!negs.Any())
                     "No negative quantities".ConsoleWriteLine();
@@ -421,6 +422,22 @@ namespace CKB
                     negs.Select(x=>new []{$"{x.Name}",$"{x.BarCode}",$"{x.Quantity}"})
                         .FormatIntoColumns(new[] {"Name","Barcode","Quantity"})
                         .ConsoleWriteLine();
+                    
+                    Console.Write("Type 'yes' to zero out these negatives in salesbinder:");
+
+                    var isYes = Console.ReadLine();
+
+                    if (string.Compare("yes", isYes, StringComparison.OrdinalIgnoreCase) == 0)
+                    {
+                        var updates = negs.Select(n =>
+                        {
+                            var clone = n.CreateCloneFromProperties();
+                            clone.Quantity = 0;
+                            return clone;
+                        });
+                        
+                        updates.ForEach(r=>r.DetectChanges(negs,true));
+                    }
                 }
             }
 

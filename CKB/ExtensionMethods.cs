@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -379,6 +380,32 @@ namespace CKB
             using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(name_))
             using (var reader = new StreamReader(stream))
                 return reader.ReadToEnd();
+        }
+
+        private static ConcurrentDictionary<string, PropertyInfo[]> _propsCache =
+            new ConcurrentDictionary<string, PropertyInfo[]>();
+        private static PropertyInfo[] GetProperties(Type t_)
+        {
+            if (_propsCache.TryGetValue(t_.FullName, out var ret))
+                return ret;
+
+            ret = t_.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.GetProperty |
+                                   BindingFlags.SetProperty);
+
+            _propsCache.TryAdd(t_.FullName, ret);
+
+            return ret;
+        }
+        
+        public static T CreateCloneFromProperties<T>(this T i_) where T : new()
+        {
+            var props = GetProperties(typeof(T));
+
+            var ret = new T();
+            
+            props.ForEach(p=>p.SetValue(ret,p.GetValue(i_)));
+
+            return ret;
         }
     }
 }
