@@ -40,6 +40,8 @@ namespace CKB
         
         public static void ConsoleWriteLine(this string str_) => Console.WriteLine(str_);
 
+        public static void ConsoleWrite(this string str_) => Console.Write(str_);
+
         public static string Join(this string[] items_, string sep_) => string.Join(sep_, items_);
 
         public static void WriteWarehouseFile(this IEnumerable<(string Identifer, int Qty, KeepaRecord Record)> books_,

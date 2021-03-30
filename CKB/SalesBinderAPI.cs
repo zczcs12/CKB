@@ -298,7 +298,14 @@ namespace CKB
             return allItems;
         }
 
+        public static void SendItemUpdate(string itemId_, string json_)
+        {
+            var response = putJson($"items/{itemId_}.json", json_);
 
+            var p = JObject.Parse(response);
+            
+            p.ExtractString("message").ConsoleWriteLine();
+        }
         public static void RetrieveAndSaveSettings()
             => File.WriteAllText(SettingsFilePath, getResponse("settings.json"));
 
@@ -399,13 +406,6 @@ namespace CKB
             _lastRequestTime = DateTime.Now;
 
             return response?.Content.ReadAsStringAsync().Result;
-        }
-
-        public static void SendItemUpdate(string itemId_, string json_)
-        {
-            var response = putJson($"items/{itemId_}.json", json_);
-            
-            response.ConsoleWriteLine();
         }
 
         public static JObject RetrieveJsonForInventoryItem(string itemId_)
@@ -619,15 +619,25 @@ namespace CKB
     {
         private static void setItemDetail(JObject root, string customFieldname_, object value_)
         {
-            var arr = (JArray) root["item"]["item_details"];
+            var itemToken = root["item"] as JObject;
+
+            var arr = itemToken["item_details"] as JArray;
+
+            if (arr == null)
+            {
+                arr = new JArray();
+                itemToken.Add("item_details",arr);
+            }
+
+            var customFieldId = SalesBinderAPI.CustomFieldNameToId[customFieldname_];
 
             var set = false;
             
             arr.ForEach(a =>
             {
-                var field = a["custom_field"]["name"].ToString();
+                var field = a["custom_field_id"].ToString();
 
-                if (field.Equals(customFieldname_))
+                if (field.Equals(customFieldId))
                 {
                     ((JValue) a["value"]).Value = value_;
                     set = true;
@@ -636,11 +646,11 @@ namespace CKB
 
             if (set) return;
             
-            var itemId = root["item"].ExtractString("id");
+            var itemId = itemToken.ExtractString("id");
 
             var toAdd = new JObject(
                 new JProperty("item_id", itemId),
-                new JProperty("custom_field_id", SalesBinderAPI.CustomFieldNameToId[customFieldname_]),
+                new JProperty("custom_field_id", customFieldId),
                 new JProperty("value", value_)
             );
             
@@ -702,7 +712,7 @@ namespace CKB
         };
 
         
-        public static bool DetectChanges(this SalesBinderInventoryItem potentialUpdates_, IEnumerable<SalesBinderInventoryItem> currentInventory_, bool sendUpdates_)
+        public static bool DetectChanges(this SalesBinderInventoryItem potentialUpdates_, IEnumerable<SalesBinderInventoryItem> currentInventory_, bool includeQuantities_, bool sendUpdates_)
         {
             var currentAsDictionary = currentInventory_.ToDictionary(x => x.Id, x => x);
             
@@ -763,6 +773,9 @@ namespace CKB
 
                 if (cv != uv)
                 {
+                    if (!includeQuantities_ && u.FieldName.Equals(InventoryFields.Quantity))
+                        return;
+       
                     changeFound = true;
                     if (sendUpdates_)
                         u.Update(getItemToUpdate(), uv);
@@ -773,6 +786,7 @@ namespace CKB
 
             if (jsonToUpdate != null && sendUpdates_)
             {
+                $"Updating '{current.Name}'... ".ConsoleWrite();
                 SalesBinderAPI.SendItemUpdate(current.Id,jsonToUpdate.ToString());
             }
 

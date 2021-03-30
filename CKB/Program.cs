@@ -85,6 +85,9 @@ namespace CKB
         [Argument('*',"sbnq","Sales Binder report negative quantities")]
         private static bool SalesBinderReportNegativeQuantities { get; set; }
         
+        [Argument('&',"updatequantities","Include changing quantities of SalesBinder updates")]
+        private static bool UpdateQuantities { get; set; }
+        
         static void Main(string[] args)
         {
             Arguments.Populate();
@@ -436,7 +439,7 @@ namespace CKB
                             return clone;
                         });
                         
-                        updates.ForEach(r=>r.DetectChanges(negs,true));
+                        updates.ForEach(r=>r.DetectChanges(negs, true, true));
                     }
                 }
             }
@@ -480,17 +483,17 @@ namespace CKB
                 if (doIt)
                 {
                     var toUpdate = recs.Where(potentialUpdate =>
-                            potentialUpdate.DetectChanges(currentInventory, false))
+                            potentialUpdate.DetectChanges(currentInventory, UpdateQuantities, false))
                         .ToArray();
 
                     if (!toUpdate.Any())
                         "No changes found.".ConsoleWriteLine();
                     else if (Force)
                     {
-                        Console.Write("Enter 'yes' to make the changes:");
+                        Console.Write("Enter 'yes' to make the changes: ");
                         var entered = Console.ReadLine();
-                        if (String.Compare("yes", entered.Trim(), StringComparison.OrdinalIgnoreCase) == 0)
-                            toUpdate.ForEach(r => r.DetectChanges(currentInventory, true));
+                        if (string.Compare("yes", entered.Trim(), StringComparison.OrdinalIgnoreCase) == 0)
+                            toUpdate.ForEach(r => r.DetectChanges(currentInventory, UpdateQuantities, true));
                         else
                             "Changed aborted.".ConsoleWriteLine();
                     }
@@ -537,9 +540,6 @@ namespace CKB
                                 
                             }
                         });
-                    
-                    
-
                 }
             }
             
