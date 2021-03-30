@@ -480,7 +480,8 @@ namespace CKB
                 if (doIt)
                 {
                     var toUpdate = recs.Where(potentialUpdate =>
-                        potentialUpdate.DetectChanges(currentInventory, false));
+                            potentialUpdate.DetectChanges(currentInventory, false))
+                        .ToArray();
 
                     if (!toUpdate.Any())
                         "No changes found.".ConsoleWriteLine();
