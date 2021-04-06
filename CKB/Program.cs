@@ -162,17 +162,20 @@ namespace CKB
                     {
                         list.Where(x=>!string.IsNullOrEmpty(x.BarCode))
                             .Select(x=>(Item:x,Keepa:KeepaAPI.GetRecordForIdentifier(x.BarCode)))
-                            .Where(x=>x.Keepa!=null && x.Keepa.CategoryTree!=null)
+                            .Where(x=>x.Keepa!=null)
                             .ForEach(l =>
                             {
                                 if (string.IsNullOrEmpty(l.Item.Author))
                                     l.Item.Author = l.Keepa.Author;
                                 if (string.IsNullOrEmpty(l.Item.Publisher))
                                     l.Item.Publisher = l.Keepa.Manufacturer;
-                                if (string.IsNullOrEmpty(l.Item.ProductType2) && l.Keepa.CategoryTree.Length > 4)
-                                    l.Item.ProductType2 = l.Keepa.CategoryTree[4];
-                                if (string.IsNullOrEmpty(l.Item.ProductType3) && l.Keepa.CategoryTree.Length > 5)
-                                    l.Item.ProductType3 = l.Keepa.CategoryTree[5];
+                                if (l.Keepa.CategoryTree != null)
+                                {
+                                    l.Item.ProductType = string.Join(" / ", l.Keepa.CategoryTree);
+                                    l.Item.ProductType2 = l.Keepa.CategoryTree.Last();
+                                    if (l.Keepa.CategoryTree.Any(x => x.ToLower().Contains("child")))
+                                        l.Item.KidsOrAdult = "Kids";
+                                }
                             });
                     }
 
