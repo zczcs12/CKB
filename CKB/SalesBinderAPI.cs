@@ -947,8 +947,35 @@ namespace CKB
         }
         static bool isClearance(SalesBinderInventoryItem item_)
             => string.IsNullOrEmpty(item_?.Clearance) ? false : understandClearance(item_.Clearance);
+
+        static bool? isKids(string given_) =>
+            string.IsNullOrEmpty(given_)
+                ? default(bool?)
+                : "kids".Equals(given_.ToLower());
+        
         public int Compare(SalesBinderInventoryItem x, SalesBinderInventoryItem y)
         {
+            var xKids = isKids(x.KidsOrAdult);
+            var yKids = isKids(y.KidsOrAdult);
+
+            if (xKids.HasValue)
+            {
+                if (yKids.HasValue)
+                {
+                    if (yKids.Value != xKids.Value)
+                        return yKids.Value.CompareTo(xKids.Value);
+                }
+                else
+                {
+                    return 1;
+                }
+            }
+            else if (yKids.HasValue)
+            {
+                return 1;
+            }
+            
+            
             var xClearance = isClearance(x);
             var yClearnce = isClearance(y);
 
