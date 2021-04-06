@@ -483,8 +483,6 @@ namespace CKB
                         if (_customFields.TryGetValue(field, out var f))
                             f?.Invoke(ret, val);
                     }
-                else
-                    "blah".ConsoleWriteLine();
             }
             catch
             {
@@ -517,7 +515,8 @@ namespace CKB
                 {InventoryCustomFields.CommodityCode, (i, v) => i.CommodityCode = v},
                 {InventoryCustomFields.MaterialComposition, (i, v) => i.MaterialComposition = v},
                 {InventoryCustomFields.Clearance, (i, v) => i.Clearance = v},
-                {InventoryCustomFields.BinLocaiton, null},
+                {InventoryCustomFields.BinLocation, null},
+                {InventoryCustomFields.SalesRestrictions,(i,v)=>i.SalesRestrictions=v},
                 {InventoryCustomFields.Rating, (i, v) => i.Rating = double.TryParse(v,out var val)? val : default(double?)}
             };
 
@@ -573,6 +572,8 @@ namespace CKB
         [Index(22)]
         public double? Rating { get; set; }
         [Index(23)]
+        public string SalesRestrictions { get; set; }
+        [Index(24)]
         public string Id { get; set; }
         [Ignore]
         public string ImageURLSmall { get; set; }
@@ -599,8 +600,9 @@ namespace CKB
         public const string CommodityCode = "Commodity Code";
         public const string MaterialComposition = "Material Composition";
         public const string Clearance = "Clearance";
-        public const string BinLocaiton = "Bin Location";
+        public const string BinLocation = "Bin Location";
         public const string Rating = "Rating";
+        public const string SalesRestrictions = "Sales Restrictions";
     }
 
     public static class InventoryFields
@@ -665,7 +667,7 @@ namespace CKB
                 return;
             }
             
-            setItemDetail(root,InventoryCustomFields.BinLocaiton,value_);
+            setItemDetail(root,InventoryCustomFields.BinLocation,value_);
 
             if(root["item"].TryExtractToken("unit_of_measure",out var uom))
             {
@@ -686,7 +688,7 @@ namespace CKB
                 (InventoryCustomFields.ProductType2, x => x.ProductType2, (o, s) => setItemDetail(o, InventoryCustomFields.ProductType2, s)),
                 (InventoryCustomFields.ProductType3, x => x.ProductType3, (o, s) => setItemDetail(o, InventoryCustomFields.ProductType3, s)),
                 (InventoryCustomFields.Clearance, x => x.Clearance, (o, s) => setItemDetail(o, InventoryCustomFields.Clearance, s)),
-                (InventoryCustomFields.BinLocaiton, x => x.BinLocation, (o, s) => setBinLocation(o, s)),
+                (InventoryCustomFields.BinLocation, x => x.BinLocation, (o, s) => setBinLocation(o, s)),
                 (InventoryCustomFields.PackSize, x => x.PackSize, (o, s) => setItemDetail(o, InventoryCustomFields.PackSize, s)),
                 (InventoryCustomFields.Author, x => x.Author, (o, s) => setItemDetail(o, InventoryCustomFields.Author, s)),
                 (InventoryCustomFields.KidsAdult, x => x.KidsOrAdult, (o, s) => setItemDetail(o, InventoryCustomFields.KidsAdult, s)),
@@ -698,6 +700,7 @@ namespace CKB
                 (InventoryCustomFields.CommodityCode, x => x.CommodityCode, (o, s) => setItemDetail(o, InventoryCustomFields.CommodityCode, s)),
                 (InventoryCustomFields.Condition, x => x.Condition, (o, s) => setItemDetail(o, InventoryCustomFields.Condition, s)),
                 (InventoryCustomFields.VAT, x => x.VAT, (o, s) => setItemDetail(o, InventoryCustomFields.VAT, s)),
+                (InventoryCustomFields.SalesRestrictions, x => x.SalesRestrictions, (o, s) => setItemDetail(o, InventoryCustomFields.SalesRestrictions, s)),
             };
         
         private static (string FieldName, Func<SalesBinderInventoryItem, decimal> Func, Action<JObject,decimal> Update)[] _decUpdates = new (string, Func<SalesBinderInventoryItem, decimal> Func, Action<JObject, decimal> Update)[]

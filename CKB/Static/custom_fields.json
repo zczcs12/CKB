@@ -68,6 +68,10 @@
     {
       "custom_field_id": "5f92c34d-c738-4d8b-aae8-559f3f71d8bf",
       "name": "Rating"
-    } 
+    },
+    {
+      "custom_field_id": "6061fbcf-95cc-4195-bbff-179f0a8e0fc5",
+      "name": "Sales Restrictions"
+    }
   ]
 }
