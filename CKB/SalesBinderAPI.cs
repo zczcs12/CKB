@@ -963,7 +963,7 @@ namespace CKB
                 if (yKids.HasValue)
                 {
                     if (yKids.Value != xKids.Value)
-                        return yKids.Value.CompareTo(xKids.Value);
+                        return xKids.Value.CompareTo(yKids.Value);
                 }
                 else
                 {
