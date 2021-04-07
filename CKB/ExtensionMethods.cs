@@ -148,7 +148,7 @@ namespace CKB
                 new (string ExcelColRef, string Heading, Func<SalesBinderInventoryItem, CellValue> ValueGetter, CellValues Type)
                     []
                     {
-                        ("A", "Name", x => new CellValue(x.Name), CellValues.String),
+                        ("A", "Barcode", x => new CellValue(x.Name), CellValues.String),
                         ("B", "Quantity", x => new CellValue(Convert.ToDouble(x.Quantity)), CellValues.Number),
                         ("C", "Price", x => new CellValue(x.Price), CellValues.Number),
                         ("D", "SKU", x => new CellValue(x.SKU), CellValues.String),
@@ -244,9 +244,9 @@ namespace CKB
                         ("A", "Barcode", x => new CellValue(x.Barcode), CellValues.String),
                         ("B", "Image", x => new CellValue(string.Empty), CellValues.String),
                         ("C", "Product description", x => new CellValue(x.Book?.Name ?? string.Empty), CellValues.String),
-                        ("D", "Kids or Adult", x => new CellValue(x.Book?.KidsOrAdult ?? string.Empty), CellValues.String),
-                        ("E", "Type", x => new CellValue(x.Book?.ProductType ?? string.Empty), CellValues.String),
-                        ("F", "Subtype", x => new CellValue(x.Book?.ProductType ?? string.Empty), CellValues.String),
+                        ("D", "Type", x=> new CellValue(x.Book?.ProductType ?? string.Empty), CellValues.String),
+                        ("E", "SubType", x=> new CellValue(x.Book?.ProductType2 ?? string.Empty), CellValues.String),
+                        ("F", "SubType2", x=> new CellValue(x.Book?.ProductType3 ?? string.Empty), CellValues.String),
                         ("G", "Author", x => new CellValue(x.Book?.Author ?? string.Empty), CellValues.String),
                         ("H", "Full RRP", x => new CellValue(x.Book?.FullRRP ?? string.Empty), CellValues.Number),
                         ("I", "Style", x => new CellValue(x.Book?.Style ?? string.Empty), CellValues.String),
@@ -254,11 +254,11 @@ namespace CKB
                         ("K", "Clearance?", x => new CellValue(string.Empty), CellValues.String),
                         ("L", "Case size", x => new CellValue(x.Book?.PackSize ?? string.Empty), CellValues.String),
                         ("M", "VAT Rate", x => new CellValue(x.Book?.VAT ?? string.Empty), CellValues.String),
-                        ("N", "ON", x => new CellValue(string.Empty), CellValues.String),
-                        ("O", "Territory Restrictions", x => new CellValue(string.Empty), CellValues.String),
+                        ("N", "Condition", x => new CellValue(x.Book?.Condition), CellValues.String),
+                        ("O", "Territory Restrictions", x => new CellValue(x.Book?.SalesRestrictions), CellValues.String),
                         ("P", "CKB Net Price", x => new CellValue(x.Book == null ? string.Empty : $"£{x.Book.Price:0.00}"), CellValues.String),
-                        ("O", "Qty", x => new CellValue(x.Book == null ? string.Empty : $"{x.Book?.Quantity:#,###}"), CellValues.String),
-                        ("P", "Order Quantity", x => new CellValue(string.Empty), CellValues.String),
+                        ("Q", "Qty", x => new CellValue(x.Book == null ? string.Empty : $"{x.Book?.Quantity:#,###}"), CellValues.String),
+                        ("R", "Order Quantity", x => new CellValue(string.Empty), CellValues.String),
                     };
 
             uint rowNumber = 1;

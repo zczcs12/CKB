@@ -74,7 +74,7 @@ namespace CKB
             var toLookup = identifier_;
 
             var makeCall = true;
-            
+
             if (!forceRefresh_)
             {
                 var subset = identifier_.Where(x => !HaveLocalRecord(x));
@@ -155,6 +155,7 @@ namespace CKB
             {
                 $"Writing record for ean identifier to '{recordPath(x)}'".ConsoleWriteLine();
                 File.WriteAllText(recordPath(x), product.ToString());
+                File.WriteAllText(lastLookupPath(x), DateTime.Now.ToString(LAST_CALL_DATEFORMAT));
             });
 
             return p;

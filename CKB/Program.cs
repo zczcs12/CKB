@@ -61,7 +61,7 @@ namespace CKB
         [Argument('/',"klp","Keepa lookup prime records.  Try to get a keepa record for anthing we've not tried before.")]
         private static bool KeepaLookupPrimeRecords { get; set; }
         
-        // [Argument('l',"klri","Keepa lookup refresh inventory - if not updated in the last 24 hours")]
+        [Argument('l',"klri","Keepa lookup refresh inventory - if not updated in the last 24 hours")]
         private static bool KeepaLookupRefreshCurrentInventory { get; set; }
         
         [Argument(')',"ka","Keepa augment (the salesbinder csv list)")]
@@ -233,12 +233,14 @@ namespace CKB
             if (KeepaLookupRefreshCurrentInventory)
             {
                 var items = SalesBinderAPI.Inventory.Where(x => x.Quantity > 0 && !string.IsNullOrEmpty(x.BarCode))
-                    .Where(x => KeepaAPI.LastLookupTime(x.BarCode).HasValue == false
-                                || (DateTime.Now - KeepaAPI.LastLookupTime(x.BarCode).Value).TotalDays < 1.0);
+                    .Select(x=>(Book:x,LastLookup:KeepaAPI.LastLookupTime(x.BarCode)))
+                    .Where(x=>x.LastLookup==null || (DateTime.Now-x.LastLookup.Value).TotalDays>1)
+                    .Select(x=>x.Book)
+                    .ToArray();
                 
                 // only want to do 100 as don't want to blow limits on keepa
                 if(!items.Any())
-                    "Nothing to do - have been updated or attempted to be updated at least oncein the last 24 hours"
+                    "Nothing to do - have been updated or attempted to be updated at least once in the last 24 hours"
                         .ConsoleWriteLine();
                 else
                 {
