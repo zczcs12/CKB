@@ -517,7 +517,7 @@ namespace CKB
                 {InventoryCustomFields.Clearance, (i, v) => i.Clearance = v},
                 {InventoryCustomFields.BinLocation, null},
                 {InventoryCustomFields.SalesRestrictions,(i,v)=>i.SalesRestrictions=v},
-                {InventoryCustomFields.Rating, (i, v) => i.Rating = double.TryParse(v,out var val)? val : default(double?)}
+                {InventoryCustomFields.Rating, (i, v) => i.Rating = v}
             };
 
 
@@ -570,7 +570,7 @@ namespace CKB
         [Index(21)]
         public string MaterialComposition { get; set; }
         [Index(22)]
-        public double? Rating { get; set; }
+        public string Rating { get; set; }
         [Index(23)]
         public string SalesRestrictions { get; set; }
         [Index(24)]
@@ -701,6 +701,7 @@ namespace CKB
                 (InventoryCustomFields.Condition, x => x.Condition, (o, s) => setItemDetail(o, InventoryCustomFields.Condition, s)),
                 (InventoryCustomFields.VAT, x => x.VAT, (o, s) => setItemDetail(o, InventoryCustomFields.VAT, s)),
                 (InventoryCustomFields.SalesRestrictions, x => x.SalesRestrictions, (o, s) => setItemDetail(o, InventoryCustomFields.SalesRestrictions, s)),
+                (InventoryCustomFields.Rating, x => x.Rating, (o, s) => setItemDetail(o, InventoryCustomFields.Rating, s)),
             };
         
         private static (string FieldName, Func<SalesBinderInventoryItem, decimal> Func, Action<JObject,decimal> Update)[] _decUpdates = new (string, Func<SalesBinderInventoryItem, decimal> Func, Action<JObject, decimal> Update)[]
@@ -948,47 +949,46 @@ namespace CKB
         static bool isClearance(SalesBinderInventoryItem item_)
             => string.IsNullOrEmpty(item_?.Clearance) ? false : understandClearance(item_.Clearance);
 
-        static bool? isKids(string given_) =>
-            string.IsNullOrEmpty(given_)
-                ? default(bool?)
-                : "kids".Equals(given_.ToLower());
+        static bool isKids(string given_) =>
+            !string.IsNullOrEmpty(given_) && "kids".Equals(given_.ToLower());
+
+        private enum Cat1Sort
+        {
+            Clearance,
+            Adult,
+            Kids,
+        }
+
+        static (Cat1Sort PrimarySort, double Rating) getSortStuff(SalesBinderInventoryItem item_)
+        {
+            var c1 = isClearance(item_)
+                ? Cat1Sort.Clearance
+                : isKids(item_.KidsOrAdult)
+                    ? Cat1Sort.Kids
+                    : Cat1Sort.Adult;
+
+            var rating = double.TryParse(item_.Rating, out var s)
+                ? s
+                : double.MaxValue;
+
+            return (c1, rating);
+        }
         
         public int Compare(SalesBinderInventoryItem x, SalesBinderInventoryItem y)
         {
-            var xKids = isKids(x.KidsOrAdult);
-            var yKids = isKids(y.KidsOrAdult);
+            var xR = getSortStuff(x);
+            var yR = getSortStuff(y);
 
-            if (xKids.HasValue)
-            {
-                if (yKids.HasValue)
-                {
-                    if (yKids.Value != xKids.Value)
-                        return xKids.Value.CompareTo(yKids.Value);
-                }
-                else
-                {
-                    return 1;
-                }
-            }
-            else if (yKids.HasValue)
-            {
+            if (xR.PrimarySort != yR.PrimarySort)
+                return xR.PrimarySort.CompareTo(yR.PrimarySort);
+
+            if (Math.Abs(xR.Rating - yR.Rating) > 1e5)
+                return xR.Rating.CompareTo(yR.Rating);
+
+            if (string.IsNullOrEmpty(x.Name) || string.IsNullOrEmpty(y.Name))
                 return 1;
-            }
-            
-            
-            var xClearance = isClearance(x);
-            var yClearnce = isClearance(y);
 
-            if (xClearance != yClearnce)
-                return xClearance.CompareTo(yClearnce);
-
-            var xRating = x.Rating ?? 0;
-            var yRating = y.Rating ?? 0;
-
-            if (xRating != yRating)
-                return xRating.CompareTo(yRating);
-
-            return (x.Name ?? string.Empty).CompareTo(y.Name ?? string.Empty);
+            return String.Compare(x.Name, y.Name, StringComparison.Ordinal);
         }
     }
 }

@@ -251,14 +251,16 @@ namespace CKB
                         ("H", "Full RRP", x => new CellValue(x.Book?.FullRRP ?? string.Empty), CellValues.Number),
                         ("I", "Style", x => new CellValue(x.Book?.Style ?? string.Empty), CellValues.String),
                         ("J", "Publisher", x => new CellValue(x.Book?.Publisher ?? string.Empty), CellValues.String),
-                        ("K", "Clearance?", x => new CellValue(string.Empty), CellValues.String),
+                        ("K", "Clearance?", x => new CellValue(x.Book?.Clearance), CellValues.String),
                         ("L", "Case size", x => new CellValue(x.Book?.PackSize ?? string.Empty), CellValues.String),
                         ("M", "VAT Rate", x => new CellValue(x.Book?.VAT ?? string.Empty), CellValues.String),
                         ("N", "Condition", x => new CellValue(x.Book?.Condition), CellValues.String),
                         ("O", "Territory Restrictions", x => new CellValue(x.Book?.SalesRestrictions), CellValues.String),
                         ("P", "CKB Net Price", x => new CellValue(x.Book == null ? string.Empty : $"£{x.Book.Price:0.00}"), CellValues.String),
-                        ("Q", "Qty", x => new CellValue(x.Book == null ? string.Empty : $"{x.Book?.Quantity:#,###}"), CellValues.String),
+                        ("Q", "Qty", x => new CellValue($"{x.Book?.Quantity:#,###}"), CellValues.String),
                         ("R", "Order Quantity", x => new CellValue(string.Empty), CellValues.String),
+                        // ("S", "Rating", x => new CellValue($"{x.Book?.Rating}"), CellValues.String),
+                        // ("T", "Adult/Kids", x => new CellValue($"{x.Book?.KidsOrAdult}"), CellValues.String),
                     };
 
             uint rowNumber = 1;
