@@ -477,11 +477,17 @@ namespace CKB
                 if(token_["item_details"] is JArray details)
                     foreach (var det in details)
                     {
-                        var field = det["custom_field"]["name"].ToString();
-                        var val = det["value"].ToString();
+                        try
+                        {
+                            var field = det["custom_field"]["name"].ToString();
+                            var val = det["value"].ToString();
 
-                        if (_customFields.TryGetValue(field, out var f))
-                            f?.Invoke(ret, val);
+                            if (_customFields.TryGetValue(field, out var f))
+                                f?.Invoke(ret, val);
+                        }
+                        catch
+                        {
+                        }
                     }
             }
             catch

@@ -550,9 +550,11 @@ namespace CKB
             
             if (Test)
             {
-                 var c = SalesBinderAPI.RetrieveJsonForInventoryItem("5b460759-5764-4a88-b3c5-2d8c3f71d8bf");
+                 var c = SalesBinderAPI.RetrieveJsonForInventoryItem("1256fcca-f3c6-4f00-b743-60a933922891");
                  c.ToString().ConsoleWriteLine();
-                 File.WriteAllText(@"e:\temp.json",c.ToString());
+                 File.WriteAllText(@"c:\users\benli\temp.json",c.ToString());
+                 var rec = SalesBinderInventoryItem.Parse(c["item"]);
+                 Console.WriteLine("BEN");
             }
         }
     }
