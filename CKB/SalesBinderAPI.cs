@@ -988,13 +988,13 @@ namespace CKB
             if (xR.PrimarySort != yR.PrimarySort)
                 return xR.PrimarySort.CompareTo(yR.PrimarySort);
 
-            if (Math.Abs(xR.Rating - yR.Rating) > 1e5)
-                return xR.Rating.CompareTo(yR.Rating);
+            if (Math.Abs(xR.Rating - yR.Rating) > 0.01)
+                return yR.Rating.CompareTo(xR.Rating);
 
             if (string.IsNullOrEmpty(x.Name) || string.IsNullOrEmpty(y.Name))
                 return 1;
 
-            return String.Compare(x.Name, y.Name, StringComparison.Ordinal);
+            return String.Compare(y.Name, x.Name, StringComparison.Ordinal);
         }
     }
 }
