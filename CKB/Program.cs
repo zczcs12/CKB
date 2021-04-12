@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -160,21 +161,34 @@ namespace CKB
 
                     if (KeepaAugmentList)
                     {
+                        var excludeFromtree = new HashSet<string>(new[] {"Books", "Subjects"});
+                        var excludeBinding = new HashSet<string>(new[] {"Kindle Edition"});
+                        
                         list.Where(x=>!string.IsNullOrEmpty(x.BarCode))
                             .Select(x=>(Item:x,Keepa:KeepaAPI.GetRecordForIdentifier(x.BarCode)))
                             .Where(x=>x.Keepa!=null)
                             .ForEach(l =>
                             {
-                                if (string.IsNullOrEmpty(l.Item.Author))
-                                    l.Item.Author = l.Keepa.Author;
                                 if (string.IsNullOrEmpty(l.Item.Publisher))
                                     l.Item.Publisher = l.Keepa.Manufacturer;
-                                if (l.Keepa.CategoryTree != null)
+
+                                if (!string.IsNullOrEmpty(l.Keepa.Binding)  && !excludeBinding.Contains(l.Keepa.Binding))
+                                    l.Item.Style = l.Keepa.Binding;
+                                
+                                if (l.Keepa.CategoryTree != null )
                                 {
-                                    l.Item.ProductType = string.Join(" / ", l.Keepa.CategoryTree);
-                                    l.Item.ProductType2 = l.Keepa.CategoryTree.Last();
-                                    if (l.Keepa.CategoryTree.Any(x => x.ToLower().Contains("child")))
-                                        l.Item.KidsOrAdult = "Kids";
+                                    var tree = l.Keepa.CategoryTree.Where(x=>!excludeFromtree.Contains(x));
+
+                                    if (tree.Any())
+                                    {
+                                        l.Item.ProductType = string.Join(" / ", tree);
+                                        l.Item.ProductType2 = tree.Last();
+                                    }
+
+                                    l.Item.KidsOrAdult =
+                                        l.Keepa.CategoryTree.Any(x => x.ToLower().Contains("child"))
+                                            ? "Kids"
+                                            : "Adult";
                                 }
                             });
                     }
