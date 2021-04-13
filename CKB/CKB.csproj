@@ -23,6 +23,8 @@
     <EmbeddedResource Include="Static\units_of_measure.json" />
     <EmbeddedResource Include="Static\custom_fields.json" />
     <None Remove="Static\zones.json" />
+    <None Remove="Static\units_of_measure.csv" />
+    <EmbeddedResource Include="Static\units_of_measure.csv" />
   </ItemGroup>
 
 </Project>

@@ -111,9 +111,23 @@ namespace CKB
         private static readonly Lazy<SalesBinderUnitOfMeasure[]> _unitsOfMeasure = new Lazy<SalesBinderUnitOfMeasure[]>(
             () =>
             {
-                var s = JToken.Parse(ExtensionMethods.GetTextFromEmbeddedResource("CKB.Static.units_of_measure.json"));
-                var arr = s?.ExtractArray("data");
-                return arr == null ? null : arr.Select(SalesBinderUnitOfMeasure.Parse).ToArray();
+                var s = ExtensionMethods.GetTextFromEmbeddedResource("CKB.Static.units_of_measure.csv");
+                
+                var lines = s.Split('\n');
+
+                var arr = lines.Skip(1).Select(x => x.Split(','))
+                    .Select(x => new SalesBinderUnitOfMeasure
+                    {
+                        Id = x[0],
+                        LongName = x[1],
+                        ShortName = x[2]
+                    }).ToArray();
+
+                return arr;
+
+                // var s = JToken.Parse(ExtensionMethods.GetTextFromEmbeddedResource("CKB.Static.units_of_measure.json"));
+                // var arr = s?.ExtractArray("data");
+                // return arr == null ? null : arr.Select(SalesBinderUnitOfMeasure.Parse).ToArray();
             });
 
         public static SalesBinderUnitOfMeasure[] UnitsOfMeasure => _unitsOfMeasure.Value;
