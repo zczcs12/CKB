@@ -326,10 +326,11 @@ namespace CKB
         public static void RetrieveAndSaveLocations()
             => File.WriteAllText(LocationsFilePath, getResponse("locations.json"));
 
-        public static void DownloadBookImages()
+        public static void DownloadBookImages() => DownloadImagesForItems(Inventory.Where(x => x.Quantity > 0));
+
+        public static void DownloadImagesForItems(IEnumerable<SalesBinderInventoryItem> items_)
         {
-            Inventory
-                .Where(x => x.Quantity > 0)
+            items_
                 .ForEach(item =>
                 {
                     var sets = new (SalesBinderInventoryItem Book, string Url, string File)[]
@@ -355,6 +356,7 @@ namespace CKB
                         }
                     });
                 });
+            
         }
 
         private static DateTime _lastRequestTime;
@@ -974,6 +976,7 @@ namespace CKB
 
         private enum Cat1Sort
         {
+            SalesRestrictions,
             Clearance,
             Adult,
             Kids,
@@ -981,7 +984,9 @@ namespace CKB
 
         static (Cat1Sort PrimarySort, double Rating) getSortStuff(SalesBinderInventoryItem item_)
         {
-            var c1 = isClearance(item_)
+            var c1 = !string.IsNullOrEmpty(item_.SalesRestrictions)
+                ? Cat1Sort.SalesRestrictions
+                : isClearance(item_)
                 ? Cat1Sort.Clearance
                 : isKids(item_.KidsOrAdult)
                     ? Cat1Sort.Kids

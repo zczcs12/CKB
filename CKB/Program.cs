@@ -415,8 +415,9 @@ namespace CKB
                     "Where should the stocklist be saved to (full path to xlsx)? :".ConsoleWriteLine();
                     targetFile = Console.ReadLine();
                 }
-
                 var inventory = SalesBinderAPI.RetrieveAndSaveInventory(true);
+                
+                SalesBinderAPI.DownloadImagesForItems(inventory);
 
                 if (!inventory.Any())
                 {
