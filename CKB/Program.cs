@@ -417,16 +417,88 @@ namespace CKB
                 }
                 var inventory = SalesBinderAPI.RetrieveAndSaveInventory(true);
                 
-                SalesBinderAPI.DownloadImagesForItems(inventory);
+
+                var listOfFilters = new List<Func<SalesBinderInventoryItem, bool>>();
+                listOfFilters.Add(x => x.Quantity > 0);
+
+                {
+                    "Do you want to apply any filters? (y|n)?".ConsoleWrite();
+                    var a = Console.ReadKey();
+                    if (a.KeyChar == 'y')
+                    {
+                        "".ConsoleWriteLine();
+                        "Type containing?:".ConsoleWrite();
+                        var type = Console.ReadLine();
+                        if (!string.IsNullOrEmpty(type))
+                            listOfFilters.Add(f =>
+                                !string.IsNullOrEmpty(f.ProductType) &&
+                                f.ProductType.ToLower().Contains(type.ToLower()));
+                        "Adults/kids:?".ConsoleWrite();
+                        var kids = Console.ReadLine();
+                        if (!string.IsNullOrEmpty(kids))
+                            listOfFilters.Add(f =>
+                                !string.IsNullOrEmpty(f.KidsOrAdult) &&
+                                f.KidsOrAdult.ToLower().Contains(kids.ToLower()));
+                        "SubType containing?:".ConsoleWrite();
+                        var subt = Console.ReadLine();
+                        if (!string.IsNullOrEmpty(subt))
+                            listOfFilters.Add(f =>
+                                !string.IsNullOrEmpty(f.ProductType2) &&
+                                f.ProductType2.ToLower().Contains(subt.ToLower()));
+                        "Publisher containing?:".ConsoleWrite();
+                        var pub = Console.ReadLine();
+                        if (!string.IsNullOrEmpty(pub))
+                            listOfFilters.Add(f =>
+                                !string.IsNullOrEmpty(f.Publisher) && f.Publisher.ToLower().Contains(pub.ToLower()));
+                        "Territory restrictions (space separate multiple)?:".ConsoleWrite();
+                        var tr = Console.ReadLine();
+                        if (!string.IsNullOrEmpty(tr))
+                        {
+                            var sep = tr.ToLower().Split(' ').Where(x => !string.IsNullOrEmpty(x)).ToList();
+                            listOfFilters.Add(f =>
+                                !string.IsNullOrEmpty(f.SalesRestrictions) && !f.SalesRestrictions.ToLower().Split(' ')
+                                    .Where(x => !string.IsNullOrEmpty(x))
+                                    .Any(s => sep.Any(t => t.Equals(s))));
+                        }
+
+                        "Minimum quantity?:".ConsoleWrite();
+                        var qty = Console.ReadLine();
+                        if (!string.IsNullOrEmpty(qty))
+                        {
+                            if (int.TryParse(qty, out var qtyI))
+                                listOfFilters.Add(f => f.Quantity >= qtyI);
+                            else
+                                "Could not parse given qty to an integer".ConsoleWriteLine();
+                        }
+
+                        "Maximum ckb net price?:".ConsoleWrite();
+                        var px = Console.ReadLine();
+                        if (!string.IsNullOrEmpty(px))
+                        {
+                            if (decimal.TryParse(px, out var pxD))
+                                listOfFilters.Add(f => f.Price <= pxD);
+                            else
+                                "could not parse given price to a decimal".ConsoleWriteLine();
+                        }
+                    }
+                }
+                
 
                 if (!inventory.Any())
                 {
-                    $"There is no salesbinder inventory locally.  run 'CKB.exe --sbid' to download inventory before trying to generate a stock list"
+                    $"There is no salesbinder inventory locally that matches the filters.  run 'CKB.exe --sbid' to download inventory before trying to generate a stock list"
                         .ConsoleWriteLine();
                 }
                 else
                 {
-                    inventory.Where(x => x.Quantity > 0)
+                    var filtered = inventory.Where(x => listOfFilters.All(f => f(x)))
+                        .ToList();
+                    
+                    SalesBinderAPI.DownloadImagesForItems(filtered);
+
+                    $"Generating spreadsheet to '{targetFile}'...".ConsoleWriteLine();
+                    
+                    filtered
                         .Select(x => (BarCode: x.BarCode, Image: ExtensionMethods.FindImagePath(x.BarCode), Item: x))
                         .OrderByDescending(x => x.Item, new StockListOrderer())
                         .WriteStockListFile(targetFile);
