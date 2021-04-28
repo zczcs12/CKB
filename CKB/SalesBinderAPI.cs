@@ -326,9 +326,10 @@ namespace CKB
         public static void RetrieveAndSaveLocations()
             => File.WriteAllText(LocationsFilePath, getResponse("locations.json"));
 
-        public static void DownloadBookImages() => DownloadImagesForItems(Inventory.Where(x => x.Quantity > 0));
+        public static void DownloadBookImages(bool force_ = false) =>
+            DownloadImagesForItems(Inventory.Where(x => x.Quantity > 0), force_);
 
-        public static void DownloadImagesForItems(IEnumerable<SalesBinderInventoryItem> items_)
+        public static void DownloadImagesForItems(IEnumerable<SalesBinderInventoryItem> items_, bool force_=false)
         {
             items_
                 .ForEach(item =>
@@ -337,9 +338,9 @@ namespace CKB
                         {
                             (item, item.ImageURLSmall, item.ImageFilePath(ImageSize.Small)),
                             (item, item.ImageURLMedium, item.ImageFilePath(ImageSize.Medium)),
-                            (item, item.ImageURLLarge, item.ImageFilePath(ImageSize.Large)),
+                            // (item, item.ImageURLLarge, item.ImageFilePath(ImageSize.Large)),
                         }
-                        .Where(x => !string.IsNullOrEmpty(x.Url) && !File.Exists(x.File));
+                        .Where(x => force_==true || !string.IsNullOrEmpty(x.Url) && !File.Exists(x.File));
 
                     if (!sets.Any()) return;
 

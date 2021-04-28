@@ -411,5 +411,79 @@ namespace CKB
 
             return ret;
         }
+
+        public static void WriteBarCodeAndImageFile(this IEnumerable<string> barcodes, string saveTo_)
+        {
+            var list = barcodes.Select(x => (BarCode: x, ImagePath: ExtensionMethods.FindImagePath(x)))
+                .ToList();
+
+            var spreadSheetDocument = SpreadsheetDocument.Create(saveTo_, SpreadsheetDocumentType.Workbook);
+            var workbookpart = spreadSheetDocument.AddWorkbookPart();
+            workbookpart.Workbook = new Workbook();
+
+            var workSheetPart = workbookpart.AddNewPart<WorksheetPart>();
+            workSheetPart.Worksheet = new Worksheet(new SheetData());
+
+            var sheets = spreadSheetDocument.WorkbookPart.Workbook.AppendChild<Sheets>(new Sheets());
+
+            var sheet = new Sheet
+            {
+                Id = spreadSheetDocument.WorkbookPart.GetIdOfPart(workSheetPart),
+                SheetId = 1,
+                Name = "Stock"
+            };
+            sheets.Append(sheet);
+
+            // headings
+            var settings =
+                new (string ExcelColRef, string Heading,
+                    Func<(string Barcode, string ImagePath), CellValue> ValueGetter, CellValues
+                    Type)
+                    []
+                    {
+                        ("A", "Barcode", x => new CellValue(x.Barcode), CellValues.String),
+                        ("B", "Image", x => new CellValue(string.Empty), CellValues.String),
+                    };
+
+            uint rowNumber = 1;
+
+            settings.ForEach(s =>
+            {
+                var cell = workSheetPart.InsertCellInWorksheet(s.ExcelColRef, rowNumber);
+                cell.DataType = CellValues.String;
+                cell.CellValue = new CellValue(s.Heading);
+            });
+
+            foreach (var book in list)
+            {
+                rowNumber += 1;
+
+                settings.ForEach(s =>
+                {
+                    var cell = workSheetPart.InsertCellInWorksheet(s.ExcelColRef, rowNumber);
+                    cell.DataType = s.Type;
+                    cell.CellValue = s.ValueGetter(book);
+                });
+
+                if (!string.IsNullOrEmpty(book.ImagePath) && File.Exists(book.ImagePath))
+                {
+                    var row = workSheetPart.Worksheet.Descendants<Row>()
+                        .FirstOrDefault(r => r.RowIndex == (uint) rowNumber);
+
+                    if (row != null)
+                    {
+                        row.Height = 60;
+                        row.CustomHeight = true;
+                    }
+
+                    workSheetPart.AddImage(book.ImagePath, string.Empty, 2, (int) (rowNumber),ProcessImageForExcel);
+                }
+            }
+
+            workbookpart.Workbook.Save();
+
+            spreadSheetDocument.Close();
+
+        }
     }
 }

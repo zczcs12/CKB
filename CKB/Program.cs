@@ -89,6 +89,13 @@ namespace CKB
         [Argument('&',"updatequantities","Include changing quantities of SalesBinder updates")]
         private static bool UpdateQuantities { get; set; }
         
+        [Argument(',',"gib","Csv of barcodes => xlsx of csv/images")]
+        private static bool ImagesForBarcodes { get; set; }
+        
+        
+        [Argument('-',"output","Output file to (only applies to some options)")]
+        private static bool OutputTo { get; set; }
+        
         static void Main(string[] args)
         {
             Arguments.Populate();
@@ -125,7 +132,7 @@ namespace CKB
             if(SalesBinderInventoryDownload)
                 SalesBinderAPI.RetrieveAndSaveInventory(topup_:!Force);
             if(SalesBinderImageDownload)
-                SalesBinderAPI.DownloadBookImages();
+                SalesBinderAPI.DownloadBookImages(Force);
             if(SalesBinderContactsDownload)
                 SalesBinderAPI.RetrieveAndSaveContacts();
             if(SalesBinderAccountsDownload)
@@ -635,10 +642,32 @@ namespace CKB
                         });
                 }
             }
+
+            if (ImagesForBarcodes)
+            {
+                var input = getArgument("gib");
+                var output = getArgument("output");
+
+                while (string.IsNullOrEmpty(input) || !File.Exists(input))
+                {
+                    "Enter source csv file location: ".ConsoleWrite();
+                    input = Console.ReadLine();
+                }
+
+                while (string.IsNullOrEmpty(output))
+                {
+                    "Enter output xlsx file path: ".ConsoleWrite();
+                    output = Console.ReadLine();
+                }
+
+                var barcode = File.ReadAllLines(input);
+                
+                barcode.WriteBarCodeAndImageFile(output);
+            }
             
             if (Test)
             {
-                 var c = SalesBinderAPI.RetrieveJsonForInventoryItem("1256fcca-f3c6-4f00-b743-60a933922891");
+                 var c = SalesBinderAPI.RetrieveJsonForInventoryItem("5fff3b26-0644-4046-90fb-7bb93f71d8bf");
                  c.ToString().ConsoleWriteLine();
                  File.WriteAllText(@"c:\users\benli\temp.json",c.ToString());
                  var rec = SalesBinderInventoryItem.Parse(c["item"]);
