@@ -455,10 +455,11 @@ namespace CKB
                         if (!string.IsNullOrEmpty(tr))
                         {
                             var sep = tr.ToLower().Split(' ').Where(x => !string.IsNullOrEmpty(x)).ToList();
-                            listOfFilters.Add(f =>
-                                !string.IsNullOrEmpty(f.SalesRestrictions) && !f.SalesRestrictions.ToLower().Split(' ')
-                                    .Where(x => !string.IsNullOrEmpty(x))
-                                    .Any(s => sep.Any(t => t.Equals(s))));
+                            listOfFilters.Add(f => string.IsNullOrEmpty(f.SalesRestrictions) ||
+                                                   (f.SalesRestrictions.ToLower()
+                                                       .Split(' ')
+                                                       .Where(x => !string.IsNullOrEmpty(x))
+                                                       .All(s => !sep.Contains(s))));
                         }
 
                         "Minimum quantity?:".ConsoleWrite();
