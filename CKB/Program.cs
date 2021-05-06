@@ -480,13 +480,23 @@ namespace CKB
                         }
 
                         "Maximum ckb net price?:".ConsoleWrite();
-                        var px = Console.ReadLine();
-                        if (!string.IsNullOrEmpty(px))
+                        var maxPx = Console.ReadLine();
+                        if (!string.IsNullOrEmpty(maxPx))
                         {
-                            if (decimal.TryParse(px, out var pxD))
+                            if (decimal.TryParse(maxPx, out var pxD))
                                 listOfFilters.Add(f => f.Price <= pxD);
                             else
-                                "could not parse given price to a decimal".ConsoleWriteLine();
+                                "Could not parse given price to a decimal".ConsoleWriteLine();
+                        }
+                        
+                        "Minimum ckb net price?:".ConsoleWrite();
+                        var minPx = Console.ReadLine();
+                        if (!string.IsNullOrEmpty(minPx))
+                        {
+                            if (decimal.TryParse(minPx, out var pxD))
+                                listOfFilters.Add(f => f.Price >= pxD);
+                            else
+                                "Could not parse given price to a decimal".ConsoleWriteLine();
                         }
                     }
                 }
