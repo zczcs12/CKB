@@ -11,70 +11,8 @@ namespace CKB
 {
     class Program
     {
-        [Argument('a',"sbad","Sales Binder Account Download")]
-        private static bool SalesBinderAccountsDownload { get; set; }
-        
-        [Argument('c',"sbid","Sales Binder Inventory Download")]
-        private static bool SalesBinderInventoryDownload { get; set; }
-        
-        [Argument('d', "sbil", "Sales Binder Inventory List => csv")]
-        private static bool SalesBinderInventoryList { get; set; }
-        
-        [Argument('e', "sbilc", "Sales Binder Inventory List (Current) => csv")]
-        private static bool SalesBinderInventoryListCurrent { get; set; }
-        
-        [Argument('f',"sbimd", "Sales Binder Image Download")]
-        private static bool SalesBinderImageDownload { get; set; }
-        
-        [Argument('g',"sbcd", "Sales Binder Contact Download")]
-        private static bool SalesBinderContactsDownload { get; set; }
-        
-        [Argument('i',"sbinvd","Sales Binder Invoices Download")]
-        private static bool SalesBinderInvoicesDownload { get; set; }
-        
-        [Argument('j',"sbiu","Sales Binder Inventory Update (from file)")]
-        private static bool SalesBinderInventoryUpdate { get; set; }
-        
-        [Argument('u', "sbimu","Sales Binder Image Upload (find for inventory without one)")]
-        private static bool SalesBinderFindAndUploadImagesForInventoryWithoutAnImage { get; set; }
-
-        [Argument('k',"force","Force updates")]
-        private static bool Force { get; set; }
-        
-        [Argument('/',"klp","Keepa lookup prime records.  Try to get a keepa record for anthing we've not tried before.")]
-        private static bool KeepaLookupPrimeRecords { get; set; }
-        
-        [Argument('l',"klri","Keepa lookup refresh inventory - if not updated in the last 24 hours")]
-        private static bool KeepaLookupRefreshCurrentInventory { get; set; }
-        
-        [Argument(')',"ka","Keepa augment (the salesbinder csv list)")]
-        private static bool KeepaAugmentList { get; set; }
-        
-        [Argument('n', "gsr", "Generate sales report csv")]
-        private static bool GenerateSalesReport { get; set; }
-        
-        [Argument('t', "test", "Test code")]
-        private static bool Test { get; set; }
-        
-        [Argument('#',"gsli","Generate stock list from inventory => xlsx")]
-        private static bool GenerateStockListFromInventory { get; set; }
-
-        [Argument('*',"sbnq","Sales Binder report negative quantities")]
-        private static bool SalesBinderReportNegativeQuantities { get; set; }
-        
-        [Argument('&',"updatequantities","Include changing quantities of SalesBinder updates")]
-        private static bool UpdateQuantities { get; set; }
-        
-        [Argument(',',"gib","Csv of barcodes => xlsx of csv/images")]
-        private static bool ImagesForBarcodes { get; set; }
-        
-        [Argument('-',"output","Output file to (only applies to some options)")]
-        private static bool OutputTo { get; set; }
-        
         static void Main(string[] args)
         {
-            Arguments.Populate();
-
             if (EnvironmentSetup.IsProperlySetup(out var error) == false)
             {
                 error.ConsoleWriteLine();
@@ -83,7 +21,7 @@ namespace CKB
 
             if (args == null || args.Length == 0 || args.First().Equals("/?") || args.Any(a=>a.StartsWith("-") && !a.StartsWith("--")))
             {
-                Arguments.GetArgumentInfo()
+                Arguments.GetArgumentInfo(typeof(Args))
                     .Select(x => new[] {$"--{x.LongName}", $"{x.HelpText}"})
                     .OrderBy(x=>x[0])
                     .FormatIntoColumns(new[] {"Argument", "Help"})
@@ -91,47 +29,41 @@ namespace CKB
                 return;
             }
 
-            var arguments = Arguments.Parse(string.Join(" ", args));
+            Arguments.Populate(typeof(Args));
+            var arguments = Arguments.Parse(string.Join(" ", args),typeof(Args));
 
-            if(SalesBinderInventoryDownload)
-                SalesBinderAPI.RetrieveAndSaveInventory(topup_:!Force);
-            if(SalesBinderImageDownload)
-                SalesBinderAPI.DownloadBookImages(Force);
-            if(SalesBinderContactsDownload)
+            if(Args.SalesBinderInventoryDownload)
+                SalesBinderAPI.RetrieveAndSaveInventory(topup_:!Args.Force);
+            if(Args.SalesBinderImageDownload)
+                SalesBinderAPI.DownloadBookImages(Args.Force);
+            if(Args.SalesBinderContactsDownload)
                 SalesBinderAPI.RetrieveAndSaveContacts();
-            if(SalesBinderAccountsDownload)
+            if(Args.SalesBinderAccountsDownload)
                 SalesBinderAPI.RetrieveAndSaveAccounts();
-            if(SalesBinderInvoicesDownload)
-                SalesBinderAPI.RetrieveAndSaveInvoices(topup_:!Force);
-            if (SalesBinderInventoryList)
-                salesBinderInventoryList(arguments, "sbil", false);
-            if (SalesBinderInventoryListCurrent)
-                salesBinderInventoryList(arguments, "sbilc", true);
-            if (KeepaLookupRefreshCurrentInventory)
+            if(Args.SalesBinderInvoicesDownload)
+                SalesBinderAPI.RetrieveAndSaveInvoices(topup_:!Args.Force);
+            if (Args.SalesBinderInventoryList)
+                salesBinderInventoryList(arguments, Args.Keys.SalesBinderInventoryList, false);
+            if (Args.SalesBinderInventoryListCurrent)
+                salesBinderInventoryList(arguments, Args.Keys.SalesBinderInventoryListCurrent, true);
+            if (Args.KeepaLookupRefreshCurrentInventory)
                 keepaLookupRefreshCurrentInventory();
-            if (KeepaLookupPrimeRecords)
+            if (Args.KeepaLookupPrimeRecords)
                 keepaLookupPrimeRecords();
-            if (GenerateSalesReport)
+            if (Args.GenerateSalesReport)
                 generateSalesReport(arguments);
-            if (SalesBinderFindAndUploadImagesForInventoryWithoutAnImage)
+            if (Args.SalesBinderFindAndUploadImagesForInventoryWithoutAnImage)
                 salesBinderFindAndUploadImagesForInventoryWithoutAnImage();
-            if (GenerateStockListFromInventory)
+            if (Args.GenerateStockListFromInventory)
                 generateStockListFromInventory(arguments);
-            if (SalesBinderReportNegativeQuantities)
-                salesBinderReportNegativeQuantities(arguments);
-            if (SalesBinderInventoryUpdate)
+            if (Args.SalesBinderReportNegativeQuantities)
+                salesBinderReportNegativeQuantities();
+            if (Args.SalesBinderInventoryUpdate)
                 salesBinderInventoryUpdate(arguments);
-            if (ImagesForBarcodes)
+            if (Args.ImagesForBarcodes)
                 imagesForBarcodes(arguments);
-            
-            if (Test)
-            {
-                 var c = SalesBinderAPI.RetrieveJsonForInventoryItem("5fff3b26-0644-4046-90fb-7bb93f71d8bf");
-                 c.ToString().ConsoleWriteLine();
-                 File.WriteAllText(@"c:\users\benli\temp.json",c.ToString());
-                 var rec = SalesBinderInventoryItem.Parse(c["item"]);
-                 Console.WriteLine("BEN");
-            }
+            if (Args.Test)
+                test();
         }
 
         private static void salesBinderAccountsList()
@@ -142,9 +74,9 @@ namespace CKB
                 .ConsoleWriteLine();
         }
         
-        private static void salesBinderInventoryList(Arguments arguments, string Arg, bool OnlyCurrent)
+        private static void salesBinderInventoryList(Arguments arguments, string arg_, bool onlyCurrent_)
         {
-            var targetPath = arguments.GetArgument(Arg);
+            var targetPath = arguments.GetArgument(arg_);
 
             if (string.IsNullOrEmpty(targetPath))
             {
@@ -155,10 +87,10 @@ namespace CKB
 
             var list = SalesBinderAPI.RetrieveAndSaveInventory(true);
 
-            if (OnlyCurrent)
+            if (onlyCurrent_)
                 list = list.Where(x => x.Quantity > 0).ToArray();
 
-            if (KeepaAugmentList)
+            if (Args.KeepaAugmentList)
             {
                 var excludeFromtree = new HashSet<string>(new[] {"Books", "Subjects"});
                 var excludeBinding = new HashSet<string>(new[] {"Kindle Edition"});
@@ -275,7 +207,7 @@ namespace CKB
                     ? $"\"{input_}\""
                     : input_;
 
-                var targetFile = arguments.GetArgument("gsr");
+                var targetFile = arguments.GetArgument(Args.Keys.GenerateSalesReport);
 
                 if (string.IsNullOrEmpty(targetFile))
                 {
@@ -371,7 +303,7 @@ namespace CKB
         
         private static void generateStockListFromInventory(Arguments arguments)
         {
-            var targetFile = arguments.GetArgument("gsli");
+            var targetFile = arguments.GetArgument(Args.Keys.GenerateStockListFromInventory);
 
             if (string.IsNullOrEmpty(targetFile))
             {
@@ -480,7 +412,7 @@ namespace CKB
             }
         }
 
-        private static void salesBinderReportNegativeQuantities(Arguments arguments)
+        private static void salesBinderReportNegativeQuantities()
         {
             var negs = SalesBinderAPI.RetrieveAndSaveInventory(true)
                 .Where(x => x.Quantity < 0);
@@ -513,7 +445,7 @@ namespace CKB
         
         private static void salesBinderInventoryUpdate(Arguments arguments)
         {
-                var sourcePath = arguments.GetArgument("sbiu");
+                var sourcePath = arguments.GetArgument(Args.Keys.SalesBinderInventoryUpdate);
                 bool doIt = true;
 
                 while (string.IsNullOrEmpty(sourcePath) || !File.Exists(sourcePath))
@@ -550,17 +482,17 @@ namespace CKB
                 if (doIt)
                 {
                     var toUpdate = recs.Where(potentialUpdate =>
-                            potentialUpdate.DetectChanges(currentInventory, UpdateQuantities, false))
+                            potentialUpdate.DetectChanges(currentInventory, Args.UpdateQuantities, false))
                         .ToArray();
 
                     if (!toUpdate.Any())
                         "No changes found.".ConsoleWriteLine();
-                    else if (Force)
+                    else if (Args.Force)
                     {
                         Console.Write("Enter 'yes' to make the changes: ");
                         var entered = Console.ReadLine();
                         if (string.Compare("yes", entered.Trim(), StringComparison.OrdinalIgnoreCase) == 0)
-                            toUpdate.ForEach(r => r.DetectChanges(currentInventory, UpdateQuantities, true));
+                            toUpdate.ForEach(r => r.DetectChanges(currentInventory, Args.UpdateQuantities, true));
                         else
                             "Changed aborted.".ConsoleWriteLine();
                     }
@@ -613,8 +545,8 @@ namespace CKB
         
         private static void imagesForBarcodes(Arguments arguments)
         {
-            var input = arguments.GetArgument("gib");
-            var output = arguments.GetArgument("output");
+            var input = arguments.GetArgument(Args.Keys.ImagesForBarcodes);
+            var output = arguments.GetArgument(Args.Keys.OutputTo);
 
             while (string.IsNullOrEmpty(input) || !File.Exists(input))
             {
@@ -631,6 +563,12 @@ namespace CKB
             var barcode = File.ReadAllLines(input);
                 
             barcode.WriteBarCodeAndImageFile(output);
+        }
+
+        private static void test()
+        {
+            var c = SalesBinderAPI.RetrieveJsonForInventoryItem("5fff3b26-0644-4046-90fb-7bb93f71d8bf");
+            c.ToString().ConsoleWriteLine();
         }
     }
 }
