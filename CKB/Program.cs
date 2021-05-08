@@ -43,9 +43,9 @@ namespace CKB
             if(Args.SalesBinderInvoicesDownload)
                 SalesBinderAPI.RetrieveAndSaveInvoices(topup_:!Args.Force);
             if (Args.SalesBinderInventoryList)
-                salesBinderInventoryList(arguments, Args.Keys.SalesBinderInventoryList, false);
+                salesBinderInventoryList(arguments, Args.Keys.SalesBinderInventoryListKey, false);
             if (Args.SalesBinderInventoryListCurrent)
-                salesBinderInventoryList(arguments, Args.Keys.SalesBinderInventoryListCurrent, true);
+                salesBinderInventoryList(arguments, Args.Keys.SalesBinderInventoryListCurrentKey, true);
             if (Args.KeepaLookupRefreshCurrentInventory)
                 keepaLookupRefreshCurrentInventory();
             if (Args.KeepaLookupPrimeRecords)
@@ -207,7 +207,7 @@ namespace CKB
                     ? $"\"{input_}\""
                     : input_;
 
-                var targetFile = arguments.GetArgument(Args.Keys.GenerateSalesReport);
+                var targetFile = arguments.GetArgument(Args.Keys.GenerateSalesReportKey);
 
                 if (string.IsNullOrEmpty(targetFile))
                 {
@@ -303,7 +303,7 @@ namespace CKB
         
         private static void generateStockListFromInventory(Arguments arguments)
         {
-            var targetFile = arguments.GetArgument(Args.Keys.GenerateStockListFromInventory);
+            var targetFile = arguments.GetArgument(Args.Keys.GenerateStockListFromInventoryKey);
 
             if (string.IsNullOrEmpty(targetFile))
             {
@@ -445,7 +445,7 @@ namespace CKB
         
         private static void salesBinderInventoryUpdate(Arguments arguments)
         {
-                var sourcePath = arguments.GetArgument(Args.Keys.SalesBinderInventoryUpdate);
+                var sourcePath = arguments.GetArgument(Args.Keys.SalesBinderInventoryUpdateKey);
                 bool doIt = true;
 
                 while (string.IsNullOrEmpty(sourcePath) || !File.Exists(sourcePath))
@@ -545,8 +545,8 @@ namespace CKB
         
         private static void imagesForBarcodes(Arguments arguments)
         {
-            var input = arguments.GetArgument(Args.Keys.ImagesForBarcodes);
-            var output = arguments.GetArgument(Args.Keys.OutputTo);
+            var input = arguments.GetArgument(Args.Keys.ImagesForBarcodesKey);
+            var output = arguments.GetArgument(Args.Keys.OutputToKey);
 
             while (string.IsNullOrEmpty(input) || !File.Exists(input))
             {
