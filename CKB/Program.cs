@@ -3,11 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using CsvHelper;
-using CsvHelper.Configuration;
-using DocumentFormat.OpenXml.Spreadsheet;
 using Utility.CommandLine;
 
 namespace CKB
@@ -16,9 +13,6 @@ namespace CKB
     {
         [Argument('a',"sbad","Sales Binder Account Download")]
         private static bool SalesBinderAccountsDownload { get; set; }
-        
-        // [Argument('b',"sbal","Sales Binder Account List => csv")]
-        private static bool SalesBinderAccountsList { get; set; }
         
         [Argument('c',"sbid","Sales Binder Inventory Download")]
         private static bool SalesBinderInventoryDownload { get; set; }
@@ -41,21 +35,9 @@ namespace CKB
         [Argument('j',"sbiu","Sales Binder Inventory Update (from file)")]
         private static bool SalesBinderInventoryUpdate { get; set; }
         
-        // [Argument('£',"sbci","Sales Binder Inventory Create (from csv of barcodes)")]
-        private static bool SalesBinderCreateInventory { get; set; }
-        
-        // [Argument('v',"sbsd","Sales Binder Settings Download")]
-        private static bool SalesBinderSettingsDownload { get; set; }
-
-        // [Argument('x',"sbld","Sales Binder Locations Download")]
-        private static bool SalesBinderLocationsDownload { get; set; }
-        
         [Argument('u', "sbimu","Sales Binder Image Upload (find for inventory without one)")]
         private static bool SalesBinderFindAndUploadImagesForInventoryWithoutAnImage { get; set; }
 
-        // [Argument('j',"kle","Keepa lookup ensure. Lookup given IDs in local keepa records. Try to update any missing.")]
-        private static bool KeepaLookupEnsure { get; set; }
-        
         [Argument('k',"force","Force updates")]
         private static bool Force { get; set; }
         
@@ -68,14 +50,8 @@ namespace CKB
         [Argument(')',"ka","Keepa augment (the salesbinder csv list)")]
         private static bool KeepaAugmentList { get; set; }
         
-        // [Argument('m',"gwl","Generate warehouse list xlsx from given csv (id,qty) file")]
-        private static bool GenerateListForWarehouse { get; set; }
-        
         [Argument('n', "gsr", "Generate sales report csv")]
         private static bool GenerateSalesReport { get; set; }
-        
-        // [Argument('q',"kru","Try to topup keepa records")]
-        private static bool TopupKeepaRecords { get; set; }
         
         [Argument('t', "test", "Test code")]
         private static bool Test { get; set; }
@@ -91,7 +67,6 @@ namespace CKB
         
         [Argument(',',"gib","Csv of barcodes => xlsx of csv/images")]
         private static bool ImagesForBarcodes { get; set; }
-        
         
         [Argument('-',"output","Output file to (only applies to some options)")]
         private static bool OutputTo { get; set; }
@@ -116,19 +91,8 @@ namespace CKB
                 return;
             }
 
-            var lookup = Arguments.Parse(string.Join(" ", args));
+            var arguments = Arguments.Parse(string.Join(" ", args));
 
-            bool hasArgument(string key_) => lookup.ArgumentDictionary.ContainsKey(key_) &&
-                                             !string.IsNullOrEmpty($"{lookup.ArgumentDictionary[key_]}");
-
-            string getArgument(string key_) => hasArgument(key_) ? $"{lookup.ArgumentDictionary[key_]}" : null;
-
-            string encaseStringWithComma(string input_) =>
-                ((!string.IsNullOrEmpty(input_) && input_.Contains(','))
-                 || (!string.IsNullOrEmpty(input_) && int.TryParse(input_, out var _)))
-                    ? $"\"{input_}\""
-                    : input_;
-            
             if(SalesBinderInventoryDownload)
                 SalesBinderAPI.RetrieveAndSaveInventory(topup_:!Force);
             if(SalesBinderImageDownload)
@@ -139,187 +103,179 @@ namespace CKB
                 SalesBinderAPI.RetrieveAndSaveAccounts();
             if(SalesBinderInvoicesDownload)
                 SalesBinderAPI.RetrieveAndSaveInvoices(topup_:!Force);
-            if(SalesBinderSettingsDownload)
-                SalesBinderAPI.RetrieveAndSaveSettings();
-            if(SalesBinderLocationsDownload)
-                SalesBinderAPI.RetrieveAndSaveLocations();
-
-            new (bool Do, string Arg, bool OnlyCurrent)[]
-                {
-                    (SalesBinderInventoryList, "sbil", false),
-                    (SalesBinderInventoryListCurrent, "sbilc", true)
-                }
-                .Where(x => x.Do)
-                .ForEach(set =>
-                {
-                    var targetPath = getArgument(set.Arg);
-                    
-                    if (string.IsNullOrEmpty(targetPath))
-                    {
-                        "Where should the inventory list be saved to (fullpath to csv)?: "
-                            .ConsoleWriteLine();
-                        targetPath = Console.ReadLine();
-                    }
-
-                    var list = SalesBinderAPI.RetrieveAndSaveInventory(true);
-
-                    if (set.OnlyCurrent)
-                        list = list.Where(x => x.Quantity > 0).ToArray();
-
-                    if (KeepaAugmentList)
-                    {
-                        var excludeFromtree = new HashSet<string>(new[] {"Books", "Subjects"});
-                        var excludeBinding = new HashSet<string>(new[] {"Kindle Edition"});
-                        
-                        list.Where(x=>!string.IsNullOrEmpty(x.BarCode))
-                            .Select(x=>(Item:x,Keepa:KeepaAPI.GetRecordForIdentifier(x.BarCode)))
-                            .Where(x=>x.Keepa!=null)
-                            .ForEach(l =>
-                            {
-                                if (string.IsNullOrEmpty(l.Item.Publisher))
-                                    l.Item.Publisher = l.Keepa.Manufacturer;
-
-                                if (!string.IsNullOrEmpty(l.Keepa.Binding)  && !excludeBinding.Contains(l.Keepa.Binding))
-                                    l.Item.Style = l.Keepa.Binding;
-                                
-                                if (l.Keepa.CategoryTree != null )
-                                {
-                                    var tree = l.Keepa.CategoryTree.Where(x=>!excludeFromtree.Contains(x));
-
-                                    if (tree.Any())
-                                    {
-                                        l.Item.ProductType = string.Join(" / ", tree);
-                                        l.Item.ProductType2 = tree.Last();
-                                    }
-
-                                    l.Item.KidsOrAdult =
-                                        l.Keepa.CategoryTree.Any(x => x.ToLower().Contains("child"))
-                                            ? "Kids"
-                                            : "Adult";
-                                }
-                            });
-                    }
-
-                    using (var writer = new StreamWriter(targetPath))
-                    using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
-                    {
-                        csv.WriteRecords(list
-                            .OrderByDescending(x => Math.Abs(x.Quantity))
-                            .ThenBy(x => x.Name));
-                    }
-                });
-                
-            
-            if (SalesBinderAccountsList)
-            {
-                var list = SalesBinderAPI.Accounts;
-                
-                (list.Length==0 ? "No local accounts found" : list.FormatIntoColumnsReflectOnType(100))
-                    .ConsoleWriteLine();
-            }
-
-            if (KeepaLookupEnsure)
-            {
-                var key = KeepaLookupEnsure ? "kle" : "klf";
-                if (!lookup.ArgumentDictionary.TryGetValue(key, out var arg) || arg==null || string.IsNullOrEmpty(arg.ToString()))
-                    "You need to supply a csv argument of the identifiers you want to lookup".ConsoleWriteLine();
-                else
-                {
-                    string[] identifiers;
-                    if (File.Exists(arg.ToString()))
-                        identifiers = File.ReadAllLines(arg.ToString()).Distinct().ToArray();
-                    else
-                        identifiers = arg.ToString().Split(',');
-                    
-                    var result = KeepaAPI.GetDetailsForIdentifiers(identifiers,forceRefresh_:Force);
-
-                    var failed = result.Where(x => x.Value == null);
-                    if (failed.Any())
-                    {
-                        $"{failed.Count()} items failed:".ConsoleWriteLine();
-                        failed.Select(x => new[] {x.Key})
-                            .FormatIntoColumns(new[] {"Failed identifier"})
-                            .ConsoleWriteLine();
-                    }
-
-                    var succeeded = result.Where(x => x.Value != null);
-                    if(succeeded.Any())
-                        succeeded.Select(x=>x.Value)
-                            .Select(x=>new [] {x.Asin,x.Title,x.Author,x.Manufacturer,x.Binding,x.ImagesCSV,x.EanList==null ? string.Empty : string.Join(",",x.EanList), x.CategoryTree==null ? string.Empty : string.Join(" / ",x.CategoryTree)})
-                            .FormatIntoColumns(new[] {"Asin","Title","Author","Manufacturer","Binding","ImagesCSV","EanList","CategoryTree"},100)
-                            .ConsoleWriteLine();
-                }
-            }
-
+            if (SalesBinderInventoryList)
+                salesBinderInventoryList(arguments, "sbil", false);
+            if (SalesBinderInventoryListCurrent)
+                salesBinderInventoryList(arguments, "sbilc", true);
             if (KeepaLookupRefreshCurrentInventory)
-            {
-                var items = SalesBinderAPI.Inventory.Where(x => x.Quantity > 0 && !string.IsNullOrEmpty(x.BarCode))
-                    .Select(x=>(Book:x,LastLookup:KeepaAPI.LastLookupTime(x.BarCode)))
-                    .Where(x=>x.LastLookup==null || (DateTime.Now-x.LastLookup.Value).TotalDays>1)
-                    .Select(x=>x.Book)
-                    .ToArray();
-                
-                // only want to do 100 as don't want to blow limits on keepa
-                if(!items.Any())
-                    "Nothing to do - have been updated or attempted to be updated at least once in the last 24 hours"
-                        .ConsoleWriteLine();
-                else
-                {
-                    var ids = items.Take(100).Select(x => x.BarCode).Distinct().ToArray();
-                    KeepaAPI.GetDetailsForIdentifiers(ids, forceRefresh_: true);
-                }
-            }
-
+                keepaLookupRefreshCurrentInventory();
             if (KeepaLookupPrimeRecords)
+                keepaLookupPrimeRecords();
+            if (GenerateSalesReport)
+                generateSalesReport(arguments);
+            if (SalesBinderFindAndUploadImagesForInventoryWithoutAnImage)
+                salesBinderFindAndUploadImagesForInventoryWithoutAnImage();
+            if (GenerateStockListFromInventory)
+                generateStockListFromInventory(arguments);
+            if (SalesBinderReportNegativeQuantities)
+                salesBinderReportNegativeQuantities(arguments);
+            if (SalesBinderInventoryUpdate)
+                salesBinderInventoryUpdate(arguments);
+            if (ImagesForBarcodes)
+                imagesForBarcodes(arguments);
+            
+            if (Test)
             {
-                var items = SalesBinderAPI.Inventory.Where(x => !string.IsNullOrEmpty(x.BarCode))
-                    .Where(x => KeepaAPI.LastLookupTime(x.BarCode) == null);
+                 var c = SalesBinderAPI.RetrieveJsonForInventoryItem("5fff3b26-0644-4046-90fb-7bb93f71d8bf");
+                 c.ToString().ConsoleWriteLine();
+                 File.WriteAllText(@"c:\users\benli\temp.json",c.ToString());
+                 var rec = SalesBinderInventoryItem.Parse(c["item"]);
+                 Console.WriteLine("BEN");
+            }
+        }
+
+        private static void salesBinderAccountsList()
+        {
+            var list = SalesBinderAPI.Accounts;
                 
-                if(!items.Any())
-                    $"Have already tried to get keepa records for all items in inventory".ConsoleWriteLine();
-                else
-                {
-                    var ids = items.Take(100).Select(x => x.BarCode).Distinct().ToArray();
-                    KeepaAPI.GetDetailsForIdentifiers(ids);
-                }
+            (list.Length==0 ? "No local accounts found" : list.FormatIntoColumnsReflectOnType(100))
+                .ConsoleWriteLine();
+        }
+        
+        private static void salesBinderInventoryList(Arguments arguments, string Arg, bool OnlyCurrent)
+        {
+            var targetPath = arguments.GetArgument(Arg);
+
+            if (string.IsNullOrEmpty(targetPath))
+            {
+                "Where should the inventory list be saved to (fullpath to csv)?: "
+                    .ConsoleWriteLine();
+                targetPath = Console.ReadLine();
             }
 
-            if (GenerateListForWarehouse)
+            var list = SalesBinderAPI.RetrieveAndSaveInventory(true);
+
+            if (OnlyCurrent)
+                list = list.Where(x => x.Quantity > 0).ToArray();
+
+            if (KeepaAugmentList)
             {
-                if (!hasArgument("gwl"))
-                {
-                    "You need to supply an output filepath (which should be an xlsx) to write the list to".ConsoleWriteLine();
-                }
-                else if (!lookup.ArgumentDictionary.TryGetValue("gwl", out var filename) || string.IsNullOrEmpty(filename?.ToString()))
-                {
-                    "No file name provided for generating warehouse list".ConsoleWriteLine();
-                }
-                else if (!File.Exists(filename.ToString()))
-                {
-                    $"Could not find file '{filename.ToString()}' as source for generating warehouse list".ConsoleWriteLine();
-                }
-                else
-                {
-                    filename.ToString().ConsoleWriteLine();
-                    var lines = File.ReadLines(filename.ToString())
-                        .Select(x => x.Split(','))
-                        .Select(x => (Id: x[0].Replace("-",string.Empty), Quantity: int.Parse(x[1])))
-                        .ToList();
+                var excludeFromtree = new HashSet<string>(new[] {"Books", "Subjects"});
+                var excludeBinding = new HashSet<string>(new[] {"Kindle Edition"});
+
+                list.Where(x => !string.IsNullOrEmpty(x.BarCode))
+                    .Select(x => (Item: x, Keepa: KeepaAPI.GetRecordForIdentifier(x.BarCode)))
+                    .Where(x => x.Keepa != null)
+                    .ForEach(l =>
+                    {
+                        if (string.IsNullOrEmpty(l.Item.Publisher))
+                            l.Item.Publisher = l.Keepa.Manufacturer;
+
+                        if (!string.IsNullOrEmpty(l.Keepa.Binding) && !excludeBinding.Contains(l.Keepa.Binding))
+                            l.Item.Style = l.Keepa.Binding;
+
+                        if (l.Keepa.CategoryTree != null)
+                        {
+                            var tree = l.Keepa.CategoryTree.Where(x => !excludeFromtree.Contains(x));
+
+                            if (tree.Any())
+                            {
+                                l.Item.ProductType = string.Join(" / ", tree);
+                                l.Item.ProductType2 = tree.Last();
+                            }
+
+                            l.Item.KidsOrAdult =
+                                l.Keepa.CategoryTree.Any(x => x.ToLower().Contains("child"))
+                                    ? "Kids"
+                                    : "Adult";
+                        }
+                    });
+            }
+
+            using (var writer = new StreamWriter(targetPath))
+            using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
+            {
+                csv.WriteRecords(list
+                    .OrderByDescending(x => Math.Abs(x.Quantity))
+                    .ThenBy(x => x.Name));
+            }
+        }
+
+        private static void keepaLookupRefreshCurrentInventory()
+        {
+            var items = SalesBinderAPI.Inventory.Where(x => x.Quantity > 0 && !string.IsNullOrEmpty(x.BarCode))
+                .Select(x=>(Book:x,LastLookup:KeepaAPI.LastLookupTime(x.BarCode)))
+                .Where(x=>x.LastLookup==null || (DateTime.Now-x.LastLookup.Value).TotalDays>1)
+                .Select(x=>x.Book)
+                .ToArray();
+                
+            // only want to do 100 as don't want to blow limits on keepa
+            if(!items.Any())
+                "Nothing to do - have been updated or attempted to be updated at least once in the last 24 hours"
+                    .ConsoleWriteLine();
+            else
+            {
+                var ids = items.Take(100).Select(x => x.BarCode).Distinct().ToArray();
+                KeepaAPI.GetDetailsForIdentifiers(ids, forceRefresh_: true);
+            }
+        }
+
+        private static void keepaLookupPrimeRecords()
+        {
+            var items = SalesBinderAPI.Inventory.Where(x => !string.IsNullOrEmpty(x.BarCode))
+                .Where(x => KeepaAPI.LastLookupTime(x.BarCode) == null);
+                
+            if(!items.Any())
+                $"Have already tried to get keepa records for all items in inventory".ConsoleWriteLine();
+            else
+            {
+                var ids = items.Take(100).Select(x => x.BarCode).Distinct().ToArray();
+                KeepaAPI.GetDetailsForIdentifiers(ids);
+            }
+        }
+
+        private static void generateListForWarehouse(Arguments arguments)
+        {
+            if (!arguments.HasArgument("gwl"))
+            {
+                "You need to supply an output filepath (which should be an xlsx) to write the list to".ConsoleWriteLine();
+            }
+            else if (!arguments.ArgumentDictionary.TryGetValue("gwl", out var filename) || string.IsNullOrEmpty(filename?.ToString()))
+            {
+                "No file name provided for generating warehouse list".ConsoleWriteLine();
+            }
+            else if (!File.Exists(filename.ToString()))
+            {
+                $"Could not find file '{filename.ToString()}' as source for generating warehouse list".ConsoleWriteLine();
+            }
+            else
+            {
+                filename.ToString().ConsoleWriteLine();
+                var lines = File.ReadLines(filename.ToString())
+                    .Select(x => x.Split(','))
+                    .Select(x => (Id: x[0].Replace("-",string.Empty), Quantity: int.Parse(x[1])))
+                    .ToList();
                     
-                    var records = KeepaAPI.GetDetailsForIdentifiers(lines.Select(x => x.Id).ToArray());
+                var records = KeepaAPI.GetDetailsForIdentifiers(lines.Select(x => x.Id).ToArray());
                     
-                    lines.Select(x =>
+                lines.Select(x =>
                     {
                         records.TryGetValue(x.Id, out var rec);
                         return (x.Id, x.Quantity, rec);
                     })
-                        .WriteWarehouseFile(getArgument("gwl"));
-                }
+                    .WriteWarehouseFile(arguments.GetArgument("gwl"));
             }
+        }
+        
+        private static void generateSalesReport(Arguments arguments)
+        {
+            string encaseStringWithComma(string input_) =>
+                ((!string.IsNullOrEmpty(input_) && input_.Contains(','))
+                 || (!string.IsNullOrEmpty(input_) && int.TryParse(input_, out var _)))
+                    ? $"\"{input_}\""
+                    : input_;
 
-            if (GenerateSalesReport)
-            {
-                var targetFile = getArgument("gsr");
+                var targetFile = arguments.GetArgument("gsr");
 
                 if (string.IsNullOrEmpty(targetFile))
                 {
@@ -384,179 +340,180 @@ namespace CKB
                     rows.ForEach(row=>sb.AppendLine(setups.Select(s=>encaseStringWithComma(s.Func(row))).ToArray().Join(",")));
                     File.WriteAllText(targetFile,sb.ToString());
                 }
+        }
+
+        private static void topupKeepaRecords()
+        {
+            var missing = SalesBinderAPI.Inventory
+                .Select(x => (Inventory: x, HaveKeepa: KeepaAPI.HaveLocalRecord(x.BarCode)))
+                .Where(x => x.HaveKeepa==false)
+                .Where(x=>!KeepaAPI.LastLookupTime(x.Inventory.BarCode).HasValue==false)
+                .ToList();
+
+            if (missing.Any())
+            {
+                KeepaAPI.GetDetailsForIdentifiers(missing.Take(100).Select(x => x.Inventory.BarCode).Distinct().ToArray());
+            }
+        }
+        
+        private static void salesBinderFindAndUploadImagesForInventoryWithoutAnImage()
+        {
+            SalesBinderAPI.Inventory.Where(x => x.HasImageSaved() == false && x.Quantity > 0)
+                .Select(x => (Item: x, Image: ExtensionMethods.FindImagePath(x.BarCode)))
+                .ForEach(x =>
+                {
+                    $"{x.Item.BarCode} : found image : {x.Image}".ConsoleWriteLine();
+
+                    if (!string.IsNullOrEmpty(x.Image))
+                        SalesBinderAPI.UploadImage(x.Item.BarCode, x.Image);
+                });
+        }
+        
+        private static void generateStockListFromInventory(Arguments arguments)
+        {
+            var targetFile = arguments.GetArgument("gsli");
+
+            if (string.IsNullOrEmpty(targetFile))
+            {
+                "Where should the stocklist be saved to (full path to xlsx)? :".ConsoleWriteLine();
+                targetFile = Console.ReadLine();
             }
 
-            if (TopupKeepaRecords)
+            var inventory = SalesBinderAPI.RetrieveAndSaveInventory(true);
+
+
+            var listOfFilters = new List<Func<SalesBinderInventoryItem, bool>>();
+            listOfFilters.Add(x => x.Quantity > 0);
+
             {
-                var missing = SalesBinderAPI.Inventory
-                    .Select(x => (Inventory: x, HaveKeepa: KeepaAPI.HaveLocalRecord(x.BarCode)))
-                    .Where(x => x.HaveKeepa==false)
-                    .Where(x=>!KeepaAPI.LastLookupTime(x.Inventory.BarCode).HasValue==false)
+                "Do you want to apply any filters? (y|n)?".ConsoleWrite();
+                var a = Console.ReadKey();
+                if (a.KeyChar == 'y')
+                {
+                    "".ConsoleWriteLine();
+                    "Type containing?:".ConsoleWrite();
+                    var type = Console.ReadLine();
+                    if (!string.IsNullOrEmpty(type))
+                        listOfFilters.Add(f =>
+                            !string.IsNullOrEmpty(f.ProductType) &&
+                            f.ProductType.ToLower().Contains(type.ToLower()));
+                    "Adults/kids:?".ConsoleWrite();
+                    var kids = Console.ReadLine();
+                    if (!string.IsNullOrEmpty(kids))
+                        listOfFilters.Add(f =>
+                            !string.IsNullOrEmpty(f.KidsOrAdult) &&
+                            f.KidsOrAdult.ToLower().Contains(kids.ToLower()));
+                    "SubType containing?:".ConsoleWrite();
+                    var subt = Console.ReadLine();
+                    if (!string.IsNullOrEmpty(subt))
+                        listOfFilters.Add(f =>
+                            !string.IsNullOrEmpty(f.ProductType2) &&
+                            f.ProductType2.ToLower().Contains(subt.ToLower()));
+                    "Publisher containing?:".ConsoleWrite();
+                    var pub = Console.ReadLine();
+                    if (!string.IsNullOrEmpty(pub))
+                        listOfFilters.Add(f =>
+                            !string.IsNullOrEmpty(f.Publisher) && f.Publisher.ToLower().Contains(pub.ToLower()));
+                    "Territory restrictions (space separate multiple)?:".ConsoleWrite();
+                    var tr = Console.ReadLine();
+                    if (!string.IsNullOrEmpty(tr))
+                    {
+                        var sep = tr.ToLower().Split(' ').Where(x => !string.IsNullOrEmpty(x)).ToList();
+                        listOfFilters.Add(f => string.IsNullOrEmpty(f.SalesRestrictions) ||
+                                               (f.SalesRestrictions.ToLower()
+                                                   .Split(' ')
+                                                   .Where(x => !string.IsNullOrEmpty(x))
+                                                   .All(s => !sep.Contains(s))));
+                    }
+
+                    "Minimum quantity?:".ConsoleWrite();
+                    var qty = Console.ReadLine();
+                    if (!string.IsNullOrEmpty(qty))
+                    {
+                        if (int.TryParse(qty, out var qtyI))
+                            listOfFilters.Add(f => f.Quantity >= qtyI);
+                        else
+                            "Could not parse given qty to an integer".ConsoleWriteLine();
+                    }
+
+                    "Maximum ckb net price?:".ConsoleWrite();
+                    var maxPx = Console.ReadLine();
+                    if (!string.IsNullOrEmpty(maxPx))
+                    {
+                        if (decimal.TryParse(maxPx, out var pxD))
+                            listOfFilters.Add(f => f.Price <= pxD);
+                        else
+                            "Could not parse given price to a decimal".ConsoleWriteLine();
+                    }
+
+                    "Minimum ckb net price?:".ConsoleWrite();
+                    var minPx = Console.ReadLine();
+                    if (!string.IsNullOrEmpty(minPx))
+                    {
+                        if (decimal.TryParse(minPx, out var pxD))
+                            listOfFilters.Add(f => f.Price >= pxD);
+                        else
+                            "Could not parse given price to a decimal".ConsoleWriteLine();
+                    }
+                }
+            }
+
+
+            if (!inventory.Any())
+            {
+                $"There is no salesbinder inventory locally that matches the filters.  run 'CKB.exe --sbid' to download inventory before trying to generate a stock list"
+                    .ConsoleWriteLine();
+            }
+            else
+            {
+                var filtered = inventory.Where(x => listOfFilters.All(f => f(x)))
                     .ToList();
 
-                if (missing.Any())
-                {
-                    KeepaAPI.GetDetailsForIdentifiers(missing.Take(100).Select(x => x.Inventory.BarCode).Distinct().ToArray());
-                }
-            }
+                SalesBinderAPI.DownloadImagesForItems(filtered);
 
-            if (SalesBinderFindAndUploadImagesForInventoryWithoutAnImage)
-            {
-                SalesBinderAPI.Inventory.Where(x=>x.HasImageSaved()==false && x.Quantity>0)
-                    .Select(x=>(Item:x,Image:ExtensionMethods.FindImagePath(x.BarCode)))
-                    .ForEach(x=>
-                    {
-                        $"{x.Item.BarCode} : found image : {x.Image}".ConsoleWriteLine();
+                $"Generating spreadsheet to '{targetFile}'...".ConsoleWriteLine();
+
+                filtered
+                    .Select(x => (BarCode: x.BarCode, Image: ExtensionMethods.FindImagePath(x.BarCode), Item: x))
+                    .OrderByDescending(x => x.Item, new StockListOrderer())
+                    .WriteStockListFile(targetFile);
+            }
+        }
+
+        private static void salesBinderReportNegativeQuantities(Arguments arguments)
+        {
+            var negs = SalesBinderAPI.RetrieveAndSaveInventory(true)
+                .Where(x => x.Quantity < 0);
                 
-                        if(!string.IsNullOrEmpty(x.Image))
-                            SalesBinderAPI.UploadImage(x.Item.BarCode,x.Image);
+            if(!negs.Any())
+                "No negative quantities".ConsoleWriteLine();
+            else
+            {
+                negs.Select(x=>new []{$"{x.Name}",$"{x.BarCode}",$"{x.Quantity}"})
+                    .FormatIntoColumns(new[] {"Name","Barcode","Quantity"})
+                    .ConsoleWriteLine();
+                    
+                Console.Write("Type 'yes' to zero out these negatives in salesbinder:");
+
+                var isYes = Console.ReadLine();
+
+                if (string.Compare("yes", isYes, StringComparison.OrdinalIgnoreCase) == 0)
+                {
+                    var updates = negs.Select(n =>
+                    {
+                        var clone = n.CreateCloneFromProperties();
+                        clone.Quantity = 0;
+                        return clone;
                     });
-            }
-            
-            if (GenerateStockListFromInventory)
-            {
-                var targetFile = getArgument("gsli");
-
-                if (string.IsNullOrEmpty(targetFile))
-                {
-                    "Where should the stocklist be saved to (full path to xlsx)? :".ConsoleWriteLine();
-                    targetFile = Console.ReadLine();
-                }
-                var inventory = SalesBinderAPI.RetrieveAndSaveInventory(true);
-                
-
-                var listOfFilters = new List<Func<SalesBinderInventoryItem, bool>>();
-                listOfFilters.Add(x => x.Quantity > 0);
-
-                {
-                    "Do you want to apply any filters? (y|n)?".ConsoleWrite();
-                    var a = Console.ReadKey();
-                    if (a.KeyChar == 'y')
-                    {
-                        "".ConsoleWriteLine();
-                        "Type containing?:".ConsoleWrite();
-                        var type = Console.ReadLine();
-                        if (!string.IsNullOrEmpty(type))
-                            listOfFilters.Add(f =>
-                                !string.IsNullOrEmpty(f.ProductType) &&
-                                f.ProductType.ToLower().Contains(type.ToLower()));
-                        "Adults/kids:?".ConsoleWrite();
-                        var kids = Console.ReadLine();
-                        if (!string.IsNullOrEmpty(kids))
-                            listOfFilters.Add(f =>
-                                !string.IsNullOrEmpty(f.KidsOrAdult) &&
-                                f.KidsOrAdult.ToLower().Contains(kids.ToLower()));
-                        "SubType containing?:".ConsoleWrite();
-                        var subt = Console.ReadLine();
-                        if (!string.IsNullOrEmpty(subt))
-                            listOfFilters.Add(f =>
-                                !string.IsNullOrEmpty(f.ProductType2) &&
-                                f.ProductType2.ToLower().Contains(subt.ToLower()));
-                        "Publisher containing?:".ConsoleWrite();
-                        var pub = Console.ReadLine();
-                        if (!string.IsNullOrEmpty(pub))
-                            listOfFilters.Add(f =>
-                                !string.IsNullOrEmpty(f.Publisher) && f.Publisher.ToLower().Contains(pub.ToLower()));
-                        "Territory restrictions (space separate multiple)?:".ConsoleWrite();
-                        var tr = Console.ReadLine();
-                        if (!string.IsNullOrEmpty(tr))
-                        {
-                            var sep = tr.ToLower().Split(' ').Where(x => !string.IsNullOrEmpty(x)).ToList();
-                            listOfFilters.Add(f => string.IsNullOrEmpty(f.SalesRestrictions) ||
-                                                   (f.SalesRestrictions.ToLower()
-                                                       .Split(' ')
-                                                       .Where(x => !string.IsNullOrEmpty(x))
-                                                       .All(s => !sep.Contains(s))));
-                        }
-
-                        "Minimum quantity?:".ConsoleWrite();
-                        var qty = Console.ReadLine();
-                        if (!string.IsNullOrEmpty(qty))
-                        {
-                            if (int.TryParse(qty, out var qtyI))
-                                listOfFilters.Add(f => f.Quantity >= qtyI);
-                            else
-                                "Could not parse given qty to an integer".ConsoleWriteLine();
-                        }
-
-                        "Maximum ckb net price?:".ConsoleWrite();
-                        var maxPx = Console.ReadLine();
-                        if (!string.IsNullOrEmpty(maxPx))
-                        {
-                            if (decimal.TryParse(maxPx, out var pxD))
-                                listOfFilters.Add(f => f.Price <= pxD);
-                            else
-                                "Could not parse given price to a decimal".ConsoleWriteLine();
-                        }
                         
-                        "Minimum ckb net price?:".ConsoleWrite();
-                        var minPx = Console.ReadLine();
-                        if (!string.IsNullOrEmpty(minPx))
-                        {
-                            if (decimal.TryParse(minPx, out var pxD))
-                                listOfFilters.Add(f => f.Price >= pxD);
-                            else
-                                "Could not parse given price to a decimal".ConsoleWriteLine();
-                        }
-                    }
-                }
-                
-
-                if (!inventory.Any())
-                {
-                    $"There is no salesbinder inventory locally that matches the filters.  run 'CKB.exe --sbid' to download inventory before trying to generate a stock list"
-                        .ConsoleWriteLine();
-                }
-                else
-                {
-                    var filtered = inventory.Where(x => listOfFilters.All(f => f(x)))
-                        .ToList();
-                    
-                    SalesBinderAPI.DownloadImagesForItems(filtered);
-
-                    $"Generating spreadsheet to '{targetFile}'...".ConsoleWriteLine();
-                    
-                    filtered
-                        .Select(x => (BarCode: x.BarCode, Image: ExtensionMethods.FindImagePath(x.BarCode), Item: x))
-                        .OrderByDescending(x => x.Item, new StockListOrderer())
-                        .WriteStockListFile(targetFile);
+                    updates.ForEach(r=>r.DetectChanges(negs, true, true));
                 }
             }
-
-            if (SalesBinderReportNegativeQuantities)
-            {
-                var negs = SalesBinderAPI.RetrieveAndSaveInventory(true)
-                    .Where(x => x.Quantity < 0);
-                
-                if(!negs.Any())
-                    "No negative quantities".ConsoleWriteLine();
-                else
-                {
-                    negs.Select(x=>new []{$"{x.Name}",$"{x.BarCode}",$"{x.Quantity}"})
-                        .FormatIntoColumns(new[] {"Name","Barcode","Quantity"})
-                        .ConsoleWriteLine();
-                    
-                    Console.Write("Type 'yes' to zero out these negatives in salesbinder:");
-
-                    var isYes = Console.ReadLine();
-
-                    if (string.Compare("yes", isYes, StringComparison.OrdinalIgnoreCase) == 0)
-                    {
-                        var updates = negs.Select(n =>
-                        {
-                            var clone = n.CreateCloneFromProperties();
-                            clone.Quantity = 0;
-                            return clone;
-                        });
-                        
-                        updates.ForEach(r=>r.DetectChanges(negs, true, true));
-                    }
-                }
-            }
-
-            if (SalesBinderInventoryUpdate)
-            {
-                var sourcePath = getArgument("sbiu");
+        }
+        
+        private static void salesBinderInventoryUpdate(Arguments arguments)
+        {
+                var sourcePath = arguments.GetArgument("sbiu");
                 bool doIt = true;
 
                 while (string.IsNullOrEmpty(sourcePath) || !File.Exists(sourcePath))
@@ -608,81 +565,72 @@ namespace CKB
                             "Changed aborted.".ConsoleWriteLine();
                     }
                 }
-            }
-
-            if (SalesBinderCreateInventory)
+        }
+        
+        private static void salesBinderCreateInventory(Arguments arguments)
+        {
+            if (!arguments.HasArgument("sbci") || !File.Exists(arguments.GetArgument("sbci")))
             {
-                if (!hasArgument("sbci") || !File.Exists(getArgument("sbci")))
-                {
-                    "You need to supply a valid path to a file in which the new inventory listed"
-                        .ConsoleWriteLine();
-                }
-                else
-                {
-                    var lines = File.ReadLines(getArgument("sbci"));
+                "You need to supply a valid path to a file in which the new inventory listed"
+                    .ConsoleWriteLine();
+            }
+            else
+            {
+                var lines = File.ReadLines(arguments.GetArgument("sbci"));
 
-                    lines.Select(x=>x.Trim())
-                        .GroupBy(l=>SalesBinderAPI.InventoryByBarcode.TryGetValue(l,out var _))
-                        .OrderBy(x=>x.Key)
-                        .Reverse()
-                        .ForEach(x =>
+                lines.Select(x=>x.Trim())
+                    .GroupBy(l=>SalesBinderAPI.InventoryByBarcode.TryGetValue(l,out var _))
+                    .OrderBy(x=>x.Key)
+                    .Reverse()
+                    .ForEach(x =>
+                    {
+                        // exists already if true
+                        if (x.Key)
                         {
-                            // exists already if true
-                            if (x.Key)
+                            x.ForEach(l =>
                             {
-                                x.ForEach(l =>
-                                {
-                                    $"Product with barcode {l} already exists (Name={SalesBinderAPI.InventoryByBarcode[l].Name})"
-                                        .ConsoleWriteLine();
-                                });
-                            }
-                            else
-                            {
-                                var recs = KeepaAPI.GetDetailsForIdentifiers(x.ToArray());
+                                $"Product with barcode {l} already exists (Name={SalesBinderAPI.InventoryByBarcode[l].Name})"
+                                    .ConsoleWriteLine();
+                            });
+                        }
+                        else
+                        {
+                            var recs = KeepaAPI.GetDetailsForIdentifiers(x.ToArray());
                     
-                                x.ForEach(l =>
-                                {
-                                    if (!recs.TryGetValue(l, out var rec))
-                                        return;
+                            x.ForEach(l =>
+                            {
+                                if (!recs.TryGetValue(l, out var rec))
+                                    return;
                         
-                                    SalesBinderAPI.CreateInventory(l,rec);
-                                });
+                                SalesBinderAPI.CreateInventory(l,rec);
+                            });
                                 
-                            }
-                        });
-                }
-            }
-
-            if (ImagesForBarcodes)
-            {
-                var input = getArgument("gib");
-                var output = getArgument("output");
-
-                while (string.IsNullOrEmpty(input) || !File.Exists(input))
-                {
-                    "Enter source csv file location: ".ConsoleWrite();
-                    input = Console.ReadLine();
-                }
-
-                while (string.IsNullOrEmpty(output))
-                {
-                    "Enter output xlsx file path: ".ConsoleWrite();
-                    output = Console.ReadLine();
-                }
-
-                var barcode = File.ReadAllLines(input);
-                
-                barcode.WriteBarCodeAndImageFile(output);
+                        }
+                    });
             }
             
-            if (Test)
+        }
+        
+        private static void imagesForBarcodes(Arguments arguments)
+        {
+            var input = arguments.GetArgument("gib");
+            var output = arguments.GetArgument("output");
+
+            while (string.IsNullOrEmpty(input) || !File.Exists(input))
             {
-                 var c = SalesBinderAPI.RetrieveJsonForInventoryItem("5fff3b26-0644-4046-90fb-7bb93f71d8bf");
-                 c.ToString().ConsoleWriteLine();
-                 File.WriteAllText(@"c:\users\benli\temp.json",c.ToString());
-                 var rec = SalesBinderInventoryItem.Parse(c["item"]);
-                 Console.WriteLine("BEN");
+                "Enter source csv file location: ".ConsoleWrite();
+                input = Console.ReadLine();
             }
+
+            while (string.IsNullOrEmpty(output))
+            {
+                "Enter output xlsx file path: ".ConsoleWrite();
+                output = Console.ReadLine();
+            }
+
+            var barcode = File.ReadAllLines(input);
+                
+            barcode.WriteBarCodeAndImageFile(output);
         }
     }
 }
