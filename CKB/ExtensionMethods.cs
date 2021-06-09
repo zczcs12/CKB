@@ -302,7 +302,111 @@ namespace CKB
 
             spreadSheetDocument.Close();
         }
-        
+
+        public static void WriteStockListFileInGroups(
+            this IEnumerable<(string Barcode, string ImagePath, SalesBinderInventoryItem Book)> items_, string saveTo_)
+        {
+            var spreadSheetDocument = SpreadsheetDocument.Create(saveTo_, SpreadsheetDocumentType.Workbook);
+            var workbookpart = spreadSheetDocument.AddWorkbookPart();
+            workbookpart.Workbook = new Workbook();
+
+
+            var groups = new (string Title, Func<SalesBinderInventoryItem, bool> Filter)[]
+            {
+                ("All", x => true),
+                ("500+", x => x.Quantity >= 500),
+                ("1000+", x => x.Quantity >= 1000)
+            };
+
+            // headings
+            var settings =
+                new (string ExcelColRef, 
+                    string Heading,
+                    Func<(string Barcode, string ImagePath, SalesBinderInventoryItem Book), CellValue>
+                    ValueGetter,
+                    CellValues
+                    Type)
+                    []
+                    {
+                        ("A", "Barcode", x => new CellValue(x.Barcode), CellValues.String),
+                        ("B", "Image", x => new CellValue(string.Empty), CellValues.String),
+                        ("C", "Title", x => new CellValue(x.Book?.Name ?? string.Empty), CellValues.String),
+                        ("D", "Category", x => new CellValue(x.Book?.ProductType ?? string.Empty), CellValues.String),
+                        ("E", "Sub Category", x => new CellValue(x.Book?.ProductType2 ?? string.Empty), CellValues.String),
+                        ("F", "Author", x => new CellValue(x.Book?.Author ?? string.Empty), CellValues.String),
+                        ("G", "Format", x => new CellValue(x.Book?.Style ?? string.Empty), CellValues.String),
+                        ("H", "Publisher", x => new CellValue(x.Book?.Publisher ?? string.Empty), CellValues.String),
+                        ("I", "Full RRP", x => new CellValue(x.Book?.FullRRP ?? string.Empty), CellValues.Number),
+                        ("J", "VAT Rate", x => new CellValue(x.Book?.VAT ?? string.Empty), CellValues.String),
+                        ("K", "CKB Net Price", x => new CellValue(x.Book == null ? string.Empty : $"£{x.Book.Price:0.00}"), CellValues.String),
+                        ("L", "Qty", x => new CellValue($"{x.Book?.Quantity:#,###}"), CellValues.String),
+                        ("M", "Order Quantity", x => new CellValue(string.Empty), CellValues.String),
+                    };
+
+            foreach (var group in groups)
+            {
+                var subList = items_.Where(x => group.Filter(x.Book));
+
+                if (!subList.Any())
+                    continue;
+
+                var count = subList.Count();
+                
+                var workSheetPart = workbookpart.AddNewPart<WorksheetPart>();
+                workSheetPart.Worksheet = new Worksheet(new SheetData());
+
+                var sheets = spreadSheetDocument.WorkbookPart.Workbook.AppendChild<Sheets>(new Sheets());
+
+                var sheet = new Sheet
+                {
+                    Id = spreadSheetDocument.WorkbookPart.GetIdOfPart(workSheetPart),
+                    SheetId = 1,
+                    Name = group.Title
+                };
+                sheets.Append(sheet);
+
+                uint rowNumber = 1;
+
+                settings.ForEach(s =>
+                {
+                    var cell = workSheetPart.InsertCellInWorksheet(s.ExcelColRef, rowNumber);
+                    cell.DataType = CellValues.String;
+                    cell.CellValue = new CellValue(s.Heading);
+                });
+
+                foreach (var book in subList)
+                {
+                    rowNumber += 1;
+
+                    settings.ForEach(s =>
+                    {
+                        var cell = workSheetPart.InsertCellInWorksheet(s.ExcelColRef, rowNumber);
+                        cell.DataType = s.Type;
+                        cell.CellValue = s.ValueGetter(book);
+                    });
+
+                    if (!string.IsNullOrEmpty(book.ImagePath) && File.Exists(book.ImagePath))
+                    {
+                        var row = workSheetPart.Worksheet.Descendants<Row>()
+                            .FirstOrDefault(r => r.RowIndex == (uint) rowNumber);
+
+                        if (row != null)
+                        {
+                            row.Height = 60;
+                            row.CustomHeight = true;
+                        }
+
+                        workSheetPart.AddImage(book.ImagePath, string.Empty, 2, (int) (rowNumber),
+                            ProcessImageForExcel);
+                    }
+                }
+            }
+
+            workbookpart.Workbook.Save();
+
+            spreadSheetDocument.Close();
+        }
+
         public static Bitmap ProcessImageForExcel(Bitmap img_)
         {
             try

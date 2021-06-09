@@ -408,7 +408,7 @@ namespace CKB
                 filtered
                     .Select(x => (BarCode: x.BarCode, Image: ExtensionMethods.FindImagePath(x.BarCode), Item: x))
                     .OrderByDescending(x => x.Item, new StockListOrderer())
-                    .WriteStockListFile(targetFile);
+                    .WriteStockListFileInGroups(targetFile);
             }
         }
 
