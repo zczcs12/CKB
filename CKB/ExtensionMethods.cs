@@ -310,13 +310,23 @@ namespace CKB
             var workbookpart = spreadSheetDocument.AddWorkbookPart();
             workbookpart.Workbook = new Workbook();
 
+            var categories = items_.Select(x => x.Book?.ProductType)
+                .Where(x => !string.IsNullOrEmpty(x))
+                .Distinct();
 
             var groups = new (string Title, Func<SalesBinderInventoryItem, bool> Filter)[]
-            {
-                ("All", x => true),
-                ("500+", x => x.Quantity >= 500),
-                ("1000+", x => x.Quantity >= 1000)
-            };
+                {
+                    ("All", x => true),
+                }
+                .Concat(categories
+                    .Select<string, (string Title, Func<SalesBinderInventoryItem, bool> Filter)>(c =>
+                        (c, b => c.Equals(b?.ProductType))))
+                .Concat(new (string Title, Func<SalesBinderInventoryItem, bool> Filter)[]
+                {
+                    ("500+", x => x.Quantity >= 500),
+                    ("1000+", x => x.Quantity >= 1000)
+                })
+                .ToArray();
 
             // headings
             var settings =
