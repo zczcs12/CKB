@@ -310,47 +310,43 @@ namespace CKB
             var workbookpart = spreadSheetDocument.AddWorkbookPart();
             workbookpart.Workbook = new Workbook();
 
-            var categories = items_.Select(x => x.Book?.ProductType)
-                .Where(x => !string.IsNullOrEmpty(x))
-                .Distinct();
-
+            
             var groups = new (string Title, Func<SalesBinderInventoryItem, bool> Filter)[]
                 {
                     ("All", x => true),
-                }
-                .Concat(categories
-                    .Select<string, (string Title, Func<SalesBinderInventoryItem, bool> Filter)>(c =>
-                        (c, b => c.Equals(b?.ProductType))))
-                .Concat(new (string Title, Func<SalesBinderInventoryItem, bool> Filter)[]
-                {
-                    ("500+", x => x.Quantity >= 500),
+                    ("Adult - Non Fiction",x=>string.Compare(x.KidsOrAdult?.Trim(),"Adult - Non Fiction",StringComparison.OrdinalIgnoreCase)==0),
+                    ("Adult Fiction",x=>string.Compare(x.KidsOrAdult?.Trim(),"Adult Fiction",StringComparison.OrdinalIgnoreCase)==0),
+                    ("Children's",x=>string.Compare(x.KidsOrAdult?.Trim(),"Children's",StringComparison.OrdinalIgnoreCase)==0),
+                    ("Food & Drink",x=>string.Compare(x.KidsOrAdult?.Trim(),"Food & Drink",StringComparison.OrdinalIgnoreCase)==0),
+                    ("Clearance",x=>x.IsClearance()),
                     ("1000+", x => x.Quantity >= 1000)
-                })
+                }
                 .ToArray();
 
             // headings
             var settings =
-                new (string ExcelColRef, 
+                new (string ExcelColRef,
                     string Heading,
                     Func<(string Barcode, string ImagePath, SalesBinderInventoryItem Book), CellValue>
                     ValueGetter,
                     CellValues
-                    Type)
+                    Type,
+                    int? customWidth)
                     []
                     {
-                        ("A", "Barcode", x => new CellValue(x.Barcode), CellValues.String),
-                        ("B", "Image", x => new CellValue(string.Empty), CellValues.String),
-                        ("C", "Title", x => new CellValue(x.Book?.Name ?? string.Empty), CellValues.String),
-                        ("D", "Category", x => new CellValue(x.Book?.ProductType ?? string.Empty), CellValues.String),
-                        ("E", "Sub Category", x => new CellValue(x.Book?.ProductType2 ?? string.Empty), CellValues.String),
-                        ("F", "Author", x => new CellValue(x.Book?.Author ?? string.Empty), CellValues.String),
-                        ("G", "Format", x => new CellValue(x.Book?.Style ?? string.Empty), CellValues.String),
-                        ("H", "Publisher", x => new CellValue(x.Book?.Publisher ?? string.Empty), CellValues.String),
-                        ("I", "Full RRP", x => new CellValue(x.Book?.FullRRP ?? string.Empty), CellValues.Number),
-                        ("J", "VAT Rate", x => new CellValue(x.Book?.VAT ?? string.Empty), CellValues.String),
-                        ("K", "CKB Net Price", x => new CellValue(x.Book == null ? string.Empty : $"£{x.Book.Price:0.00}"), CellValues.String),
-                        ("L", "Qty", x => new CellValue($"{x.Book?.Quantity:#,###}"), CellValues.String),
-                        ("M", "Order Quantity", x => new CellValue(string.Empty), CellValues.String),
+                        ("A", "Barcode", x => new CellValue(x.Barcode), CellValues.String, default),
+                        ("B", "Image", x => new CellValue(string.Empty), CellValues.String, 120),
+                        ("C", "Title", x => new CellValue(x.Book?.Name ?? string.Empty), CellValues.String, default),
+                        ("D", "Category", x => new CellValue(x.Book?.KidsOrAdult ?? string.Empty), CellValues.String, default),
+                        ("E", "Sub Category", x => new CellValue(x.Book?.ProductType ?? string.Empty), CellValues.String, default),
+                        ("F", "Author", x => new CellValue(x.Book?.Author ?? string.Empty), CellValues.String, default),
+                        ("G", "Format", x => new CellValue(x.Book?.Style ?? string.Empty), CellValues.String, default),
+                        ("H", "Publisher", x => new CellValue(x.Book?.Publisher ?? string.Empty), CellValues.String, default),
+                        ("I", "Full RRP", x => new CellValue(x.Book?.FullRRP ?? string.Empty), CellValues.Number, default),
+                        ("J", "VAT Rate", x => new CellValue(x.Book?.VAT ?? string.Empty), CellValues.String, default),
+                        ("K", "CKB Net Price", x => new CellValue(x.Book == null ? string.Empty : $"£{x.Book.Price:0.00}"), CellValues.String, default),
+                        ("L", "Qty", x => new CellValue($"{x.Book?.Quantity:#,###}"), CellValues.String, default),
+                        ("M", "Order Quantity", x => new CellValue(string.Empty), CellValues.String, default),
                     };
 
             foreach (var group in groups)
@@ -360,8 +356,6 @@ namespace CKB
                 if (!subList.Any())
                     continue;
 
-                var count = subList.Count();
-                
                 var workSheetPart = workbookpart.AddNewPart<WorksheetPart>();
                 workSheetPart.Worksheet = new Worksheet(new SheetData());
 
@@ -402,7 +396,7 @@ namespace CKB
 
                         if (row != null)
                         {
-                            row.Height = 60;
+                            row.Height = 120;
                             row.CustomHeight = true;
                         }
 
@@ -421,7 +415,7 @@ namespace CKB
         {
             try
             {
-                return img_.ResizeImageToHeight(60);
+                return img_.ResizeImage(120, 120);
             }
             catch
             {
