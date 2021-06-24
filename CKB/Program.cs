@@ -323,24 +323,18 @@ namespace CKB
                 if (a.KeyChar == 'y')
                 {
                     "".ConsoleWriteLine();
-                    "Type containing?:".ConsoleWrite();
-                    var type = Console.ReadLine();
-                    if (!string.IsNullOrEmpty(type))
-                        listOfFilters.Add(f =>
-                            !string.IsNullOrEmpty(f.ProductType) &&
-                            f.ProductType.ToLower().Contains(type.ToLower()));
-                    "Adults/kids:?".ConsoleWrite();
-                    var kids = Console.ReadLine();
-                    if (!string.IsNullOrEmpty(kids))
+                    "Category (SB:KidsOrAdult) containing?:".ConsoleWrite();
+                    var category = Console.ReadLine();
+                    if (!string.IsNullOrEmpty(category))
                         listOfFilters.Add(f =>
                             !string.IsNullOrEmpty(f.KidsOrAdult) &&
-                            f.KidsOrAdult.ToLower().Contains(kids.ToLower()));
-                    "SubType containing?:".ConsoleWrite();
-                    var subt = Console.ReadLine();
-                    if (!string.IsNullOrEmpty(subt))
+                            f.ProductType.ToLower().Contains(category.ToLower()));
+                    "Subcategory (SB:ProductType) containing?".ConsoleWrite();
+                    var subcategory = Console.ReadLine();
+                    if (!string.IsNullOrEmpty(subcategory))
                         listOfFilters.Add(f =>
-                            !string.IsNullOrEmpty(f.ProductType2) &&
-                            f.ProductType2.ToLower().Contains(subt.ToLower()));
+                            !string.IsNullOrEmpty(f.ProductType) &&
+                            f.ProductType.ToLower().Contains(subcategory.ToLower()));
                     "Publisher containing?:".ConsoleWrite();
                     var pub = Console.ReadLine();
                     if (!string.IsNullOrEmpty(pub))
@@ -357,7 +351,6 @@ namespace CKB
                                                    .Where(x => !string.IsNullOrEmpty(x))
                                                    .All(s => !sep.Contains(s))));
                     }
-
                     "Minimum quantity?:".ConsoleWrite();
                     var qty = Console.ReadLine();
                     if (!string.IsNullOrEmpty(qty))
@@ -367,7 +360,6 @@ namespace CKB
                         else
                             "Could not parse given qty to an integer".ConsoleWriteLine();
                     }
-
                     "Maximum ckb net price?:".ConsoleWrite();
                     var maxPx = Console.ReadLine();
                     if (!string.IsNullOrEmpty(maxPx))
@@ -377,7 +369,6 @@ namespace CKB
                         else
                             "Could not parse given price to a decimal".ConsoleWriteLine();
                     }
-
                     "Minimum ckb net price?:".ConsoleWrite();
                     var minPx = Console.ReadLine();
                     if (!string.IsNullOrEmpty(minPx))
@@ -408,7 +399,7 @@ namespace CKB
                 filtered
                     .Select(x => (BarCode: x.BarCode, Image: ExtensionMethods.FindImagePath(x.BarCode), Item: x))
                     .OrderByDescending(x => x.Item, new StockListOrderer())
-                    .WriteStockListFile(targetFile);
+                    .WriteStockListFileInGroups(targetFile);
             }
         }
 

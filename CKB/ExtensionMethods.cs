@@ -302,12 +302,120 @@ namespace CKB
 
             spreadSheetDocument.Close();
         }
-        
+
+        public static void WriteStockListFileInGroups(
+            this IEnumerable<(string Barcode, string ImagePath, SalesBinderInventoryItem Book)> items_, string saveTo_)
+        {
+            var spreadSheetDocument = SpreadsheetDocument.Create(saveTo_, SpreadsheetDocumentType.Workbook);
+            var workbookpart = spreadSheetDocument.AddWorkbookPart();
+            workbookpart.Workbook = new Workbook();
+
+            
+            var groups = new (string Title, Func<SalesBinderInventoryItem, bool> Filter)[]
+                {
+                    ("All", x => true),
+                    ("Adult - Non Fiction",x=>string.Compare(x.KidsOrAdult?.Trim(),"Adult - Non Fiction",StringComparison.OrdinalIgnoreCase)==0),
+                    ("Adult Fiction",x=>string.Compare(x.KidsOrAdult?.Trim(),"Adult Fiction",StringComparison.OrdinalIgnoreCase)==0),
+                    ("Children's",x=>string.Compare(x.KidsOrAdult?.Trim(),"Children's",StringComparison.OrdinalIgnoreCase)==0),
+                    ("Food & Drink",x=>string.Compare(x.KidsOrAdult?.Trim(),"Food & Drink",StringComparison.OrdinalIgnoreCase)==0),
+                    ("Clearance",x=>x.IsClearance()),
+                    ("1000+", x => x.Quantity >= 1000)
+                }
+                .ToArray();
+
+            // headings
+            var settings =
+                new (string ExcelColRef,
+                    string Heading,
+                    Func<(string Barcode, string ImagePath, SalesBinderInventoryItem Book), CellValue>
+                    ValueGetter,
+                    CellValues
+                    Type,
+                    int? customWidth)
+                    []
+                    {
+                        ("A", "Barcode", x => new CellValue(x.Barcode), CellValues.String, default),
+                        ("B", "Image", x => new CellValue(string.Empty), CellValues.String, 120),
+                        ("C", "Title", x => new CellValue(x.Book?.Name ?? string.Empty), CellValues.String, default),
+                        ("D", "Category", x => new CellValue(x.Book?.KidsOrAdult ?? string.Empty), CellValues.String, default),
+                        ("E", "Sub Category", x => new CellValue(x.Book?.ProductType ?? string.Empty), CellValues.String, default),
+                        ("F", "Author", x => new CellValue(x.Book?.Author ?? string.Empty), CellValues.String, default),
+                        ("G", "Format", x => new CellValue(x.Book?.Style ?? string.Empty), CellValues.String, default),
+                        ("H", "Publisher", x => new CellValue(x.Book?.Publisher ?? string.Empty), CellValues.String, default),
+                        ("I", "Full RRP", x => new CellValue(x.Book?.FullRRP ?? string.Empty), CellValues.Number, default),
+                        ("J", "VAT Rate", x => new CellValue(x.Book?.VAT ?? string.Empty), CellValues.String, default),
+                        ("K", "CKB Net Price", x => new CellValue(x.Book == null ? string.Empty : $"£{x.Book.Price:0.00}"), CellValues.String, default),
+                        ("L", "Qty", x => new CellValue($"{x.Book?.Quantity:#,###}"), CellValues.String, default),
+                        ("M", "Order Quantity", x => new CellValue(string.Empty), CellValues.String, default),
+                    };
+
+            foreach (var group in groups)
+            {
+                var subList = items_.Where(x => group.Filter(x.Book));
+
+                if (!subList.Any())
+                    continue;
+
+                var workSheetPart = workbookpart.AddNewPart<WorksheetPart>();
+                workSheetPart.Worksheet = new Worksheet(new SheetData());
+
+                var sheets = spreadSheetDocument.WorkbookPart.Workbook.AppendChild<Sheets>(new Sheets());
+
+                var sheet = new Sheet
+                {
+                    Id = spreadSheetDocument.WorkbookPart.GetIdOfPart(workSheetPart),
+                    SheetId = 1,
+                    Name = group.Title
+                };
+                sheets.Append(sheet);
+
+                uint rowNumber = 1;
+
+                settings.ForEach(s =>
+                {
+                    var cell = workSheetPart.InsertCellInWorksheet(s.ExcelColRef, rowNumber);
+                    cell.DataType = CellValues.String;
+                    cell.CellValue = new CellValue(s.Heading);
+                });
+
+                foreach (var book in subList)
+                {
+                    rowNumber += 1;
+
+                    settings.ForEach(s =>
+                    {
+                        var cell = workSheetPart.InsertCellInWorksheet(s.ExcelColRef, rowNumber);
+                        cell.DataType = s.Type;
+                        cell.CellValue = s.ValueGetter(book);
+                    });
+
+                    if (!string.IsNullOrEmpty(book.ImagePath) && File.Exists(book.ImagePath))
+                    {
+                        var row = workSheetPart.Worksheet.Descendants<Row>()
+                            .FirstOrDefault(r => r.RowIndex == (uint) rowNumber);
+
+                        if (row != null)
+                        {
+                            row.Height = 120;
+                            row.CustomHeight = true;
+                        }
+
+                        workSheetPart.AddImage(book.ImagePath, string.Empty, 2, (int) (rowNumber),
+                            ProcessImageForExcel);
+                    }
+                }
+            }
+
+            workbookpart.Workbook.Save();
+
+            spreadSheetDocument.Close();
+        }
+
         public static Bitmap ProcessImageForExcel(Bitmap img_)
         {
             try
             {
-                return img_.ResizeImageToHeight(60);
+                return img_.ResizeImage(120, 120);
             }
             catch
             {

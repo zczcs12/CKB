@@ -819,6 +819,24 @@ namespace CKB
 
             return changeFound;
         }
+
+        public static bool IsClearance(this SalesBinderInventoryItem item_)
+        {
+            bool understandClearance(string given_)
+            {
+                switch (given_.Trim().ToLower())
+                {
+                    case "yes":
+                    case "y":
+                    case "true":
+                        return true;
+                    default:
+                        return false;
+                }
+            }
+
+            return !string.IsNullOrEmpty(item_?.Clearance) && understandClearance(item_.Clearance); 
+        }
     }
     
     public class SalesBinderContact
@@ -957,20 +975,6 @@ namespace CKB
 
     public class StockListOrderer : IComparer<SalesBinderInventoryItem>
     {
-        static bool understandClearance(string given_)
-        {
-            switch (given_.Trim().ToLower())
-            {
-                case "yes":
-                    case "y":
-                    case "true":
-                    return true;
-                default:
-                    return false;
-            }
-        }
-        static bool isClearance(SalesBinderInventoryItem item_)
-            => string.IsNullOrEmpty(item_?.Clearance) ? false : understandClearance(item_.Clearance);
 
         static bool isKids(string given_) =>
             !string.IsNullOrEmpty(given_) && "kids".Equals(given_.ToLower());
@@ -987,7 +991,7 @@ namespace CKB
         {
             var c1 = !string.IsNullOrEmpty(item_.SalesRestrictions)
                 ? Cat1Sort.SalesRestrictions
-                : isClearance(item_)
+                : item_.IsClearance()
                 ? Cat1Sort.Clearance
                 : isKids(item_.KidsOrAdult)
                     ? Cat1Sort.Kids
