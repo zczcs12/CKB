@@ -303,25 +303,40 @@ namespace CKB
             spreadSheetDocument.Close();
         }
 
-        public static void WriteStockListFileInGroups(
+        public static void WriteStockListFileInStandardGroups(
             this IEnumerable<(string Barcode, string ImagePath, SalesBinderInventoryItem Book)> items_, string saveTo_)
+        {
+            $"Writing {saveTo_}...".ConsoleWrite();
+            items_.WriteStockListFileInGroups(
+                new (string Title, Func<SalesBinderInventoryItem, bool> Filter)[]
+                {
+                    ("All", x => true),
+                },saveTo_);
+            $"done.".ConsoleWriteLine();
+
+            var fileNameForTabs = saveTo_.Replace(".xlsx", "_tabs.xlsx");
+            
+            $"Writing {fileNameForTabs}...".ConsoleWrite();
+            items_.WriteStockListFileInGroups(new (string Title, Func<SalesBinderInventoryItem, bool> Filter)[]
+            {
+                ("Adult - Non Fiction",x=>string.Compare(x.KidsOrAdult?.Trim(),"Adult - Non Fiction",StringComparison.OrdinalIgnoreCase)==0),
+                ("Adult Fiction",x=>string.Compare(x.KidsOrAdult?.Trim(),"Adult Fiction",StringComparison.OrdinalIgnoreCase)==0),
+                ("Children's",x=>string.Compare(x.KidsOrAdult?.Trim(),"Children's",StringComparison.OrdinalIgnoreCase)==0),
+                ("Food & Drink",x=>string.Compare(x.KidsOrAdult?.Trim(),"Food & Drink",StringComparison.OrdinalIgnoreCase)==0),
+                ("Clearance",x=>x.IsClearance()),
+                ("1000+", x => x.Quantity >= 1000)
+            },fileNameForTabs);
+            "done.".ConsoleWriteLine();
+        }
+        
+        public static void WriteStockListFileInGroups(
+            this IEnumerable<(string Barcode, string ImagePath, SalesBinderInventoryItem Book)> items_,
+            IEnumerable<(string Title, Func<SalesBinderInventoryItem, bool> Filter)> groups,
+            string saveTo_)
         {
             var spreadSheetDocument = SpreadsheetDocument.Create(saveTo_, SpreadsheetDocumentType.Workbook);
             var workbookpart = spreadSheetDocument.AddWorkbookPart();
             workbookpart.Workbook = new Workbook();
-
-            
-            var groups = new (string Title, Func<SalesBinderInventoryItem, bool> Filter)[]
-                {
-                    ("All", x => true),
-                    ("Adult - Non Fiction",x=>string.Compare(x.KidsOrAdult?.Trim(),"Adult - Non Fiction",StringComparison.OrdinalIgnoreCase)==0),
-                    ("Adult Fiction",x=>string.Compare(x.KidsOrAdult?.Trim(),"Adult Fiction",StringComparison.OrdinalIgnoreCase)==0),
-                    ("Children's",x=>string.Compare(x.KidsOrAdult?.Trim(),"Children's",StringComparison.OrdinalIgnoreCase)==0),
-                    ("Food & Drink",x=>string.Compare(x.KidsOrAdult?.Trim(),"Food & Drink",StringComparison.OrdinalIgnoreCase)==0),
-                    ("Clearance",x=>x.IsClearance()),
-                    ("1000+", x => x.Quantity >= 1000)
-                }
-                .ToArray();
 
             // headings
             var settings =

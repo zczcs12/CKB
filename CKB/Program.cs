@@ -389,17 +389,17 @@ namespace CKB
             }
             else
             {
+                "".ConsoleWriteLine();
+                
                 var filtered = inventory.Where(x => listOfFilters.All(f => f(x)))
                     .ToList();
 
                 SalesBinderAPI.DownloadImagesForItems(filtered);
 
-                $"Generating spreadsheet to '{targetFile}'...".ConsoleWriteLine();
-
                 filtered
                     .Select(x => (BarCode: x.BarCode, Image: ExtensionMethods.FindImagePath(x.BarCode), Item: x))
                     .OrderByDescending(x => x.Item, new StockListOrderer())
-                    .WriteStockListFileInGroups(targetFile);
+                    .WriteStockListFileInStandardGroups(targetFile);
             }
         }
 
