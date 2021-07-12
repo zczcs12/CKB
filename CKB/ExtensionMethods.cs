@@ -19,6 +19,16 @@ namespace CKB
                 onEach_(i);
         }
 
+        public static void ForEach<T>(this IEnumerable<T> items_, Action<T, int> onEach_)
+        {
+            int i = 0;
+            foreach (var t in items_)
+            {
+                onEach_(t, i);
+                i += 1;
+            }
+        }
+
         public static string ImageFilePath(this SalesBinderInventoryItem inventoryItem, ImageSize size_)
         {
             switch (size_)
@@ -335,8 +345,9 @@ namespace CKB
             string saveTo_)
         {
             var spreadSheetDocument = SpreadsheetDocument.Create(saveTo_, SpreadsheetDocumentType.Workbook);
-            var workbookpart = spreadSheetDocument.AddWorkbookPart();
-            workbookpart.Workbook = new Workbook();
+            spreadSheetDocument.AddWorkbookPart();
+            spreadSheetDocument.WorkbookPart.Workbook = new Workbook();
+            spreadSheetDocument.WorkbookPart.Workbook.Append(new BookViews(new WorkbookView()));
 
             // headings
             var settings =
@@ -364,64 +375,70 @@ namespace CKB
                         ("M", "Order Quantity", x => new CellValue(string.Empty), CellValues.String, default),
                     };
 
-            foreach (var group in groups)
-            {
-                var subList = items_.Where(x => group.Filter(x.Book));
-
-                if (!subList.Any())
-                    continue;
-
-                var workSheetPart = workbookpart.AddNewPart<WorksheetPart>();
-                workSheetPart.Worksheet = new Worksheet(new SheetData());
-
-                var sheets = spreadSheetDocument.WorkbookPart.Workbook.AppendChild<Sheets>(new Sheets());
-
-                var sheet = new Sheet
+            groups.Select(g=>(Group:g,Items:items_.Where(x=>g.Filter(x.Book))))
+                .Where(x=>x.Items.Any())
+                .ForEach((set, index) =>
                 {
-                    Id = spreadSheetDocument.WorkbookPart.GetIdOfPart(workSheetPart),
-                    SheetId = 1,
-                    Name = group.Title
-                };
-                sheets.Append(sheet);
+                    var workSheetNo = (uint)index + 1;
+                    var workSheetName = set.Group.Title;
+                    
+                    var newWorksheetPart = spreadSheetDocument.WorkbookPart.AddNewPart<WorksheetPart>();
+                    newWorksheetPart.Worksheet = new Worksheet(new SheetData());
 
-                uint rowNumber = 1;
-
-                settings.ForEach(s =>
-                {
-                    var cell = workSheetPart.InsertCellInWorksheet(s.ExcelColRef, rowNumber);
-                    cell.DataType = CellValues.String;
-                    cell.CellValue = new CellValue(s.Heading);
-                });
-
-                foreach (var book in subList)
-                {
-                    rowNumber += 1;
+                    #region write data
+                    uint rowNumber = 1;
 
                     settings.ForEach(s =>
                     {
-                        var cell = workSheetPart.InsertCellInWorksheet(s.ExcelColRef, rowNumber);
-                        cell.DataType = s.Type;
-                        cell.CellValue = s.ValueGetter(book);
+                        var cell = newWorksheetPart.InsertCellInWorksheet(s.ExcelColRef, rowNumber);
+                        cell.DataType = CellValues.String;
+                        cell.CellValue = new CellValue(s.Heading);
                     });
 
-                    if (!string.IsNullOrEmpty(book.ImagePath) && File.Exists(book.ImagePath))
+                    foreach (var book in set.Items)
                     {
-                        var row = workSheetPart.Worksheet.Descendants<Row>()
-                            .FirstOrDefault(r => r.RowIndex == (uint) rowNumber);
+                        rowNumber += 1;
 
-                        if (row != null)
+                        settings.ForEach(s =>
                         {
-                            row.Height = 120;
-                            row.CustomHeight = true;
+                            var cell = newWorksheetPart.InsertCellInWorksheet(s.ExcelColRef, rowNumber);
+                            cell.DataType = s.Type;
+                            cell.CellValue = s.ValueGetter(book);
+                        });
+
+                        if (!string.IsNullOrEmpty(book.ImagePath) && File.Exists(book.ImagePath))
+                        {
+                            var row = newWorksheetPart.Worksheet.Descendants<Row>()
+                                .FirstOrDefault(r => r.RowIndex == (uint) rowNumber);
+
+                            if (row != null)
+                            {
+                                row.Height = 120;
+                                row.CustomHeight = true;
+                            }
+
+                            newWorksheetPart.AddImage(book.ImagePath, string.Empty, 2, (int) (rowNumber),
+                                ProcessImageForExcel);
                         }
-
-                        workSheetPart.AddImage(book.ImagePath, string.Empty, 2, (int) (rowNumber),
-                            ProcessImageForExcel);
                     }
-                }
-            }
 
-            workbookpart.Workbook.Save();
+                    #endregion
+                    
+                    newWorksheetPart.Worksheet.Save();
+
+                    if (workSheetNo == 1)
+                        spreadSheetDocument.WorkbookPart.Workbook.AppendChild(new Sheets());
+                    
+                    spreadSheetDocument.WorkbookPart.Workbook.GetFirstChild<Sheets>()
+                        .AppendChild(new Sheet
+                        {
+                            Id = spreadSheetDocument.WorkbookPart.GetIdOfPart(newWorksheetPart),
+                            SheetId = workSheetNo,
+                            Name = workSheetName
+                        });
+                });
+
+            spreadSheetDocument.WorkbookPart.Workbook.Save();
 
             spreadSheetDocument.Close();
         }
