@@ -321,22 +321,14 @@ namespace CKB
                 new (string Title, Func<SalesBinderInventoryItem, bool> Filter)[]
                 {
                     ("All", x => true),
+                    ("Adult - Non Fiction",x=>string.Compare(x.KidsOrAdult?.Trim(),"Adult - Non Fiction",StringComparison.OrdinalIgnoreCase)==0),
+                    ("Adult Fiction",x=>string.Compare(x.KidsOrAdult?.Trim(),"Adult Fiction",StringComparison.OrdinalIgnoreCase)==0),
+                    ("Children's",x=>string.Compare(x.KidsOrAdult?.Trim(),"Children's",StringComparison.OrdinalIgnoreCase)==0),
+                    ("Food & Drink",x=>string.Compare(x.KidsOrAdult?.Trim(),"Food & Drink",StringComparison.OrdinalIgnoreCase)==0),
+                    ("Clearance",x=>x.IsClearance()),
+                    ("1000+", x => x.Quantity >= 1000)
                 },saveTo_);
             $"done.".ConsoleWriteLine();
-
-            var fileNameForTabs = saveTo_.Replace(".xlsx", "_tabs.xlsx");
-            
-            $"Writing {fileNameForTabs}...".ConsoleWrite();
-            items_.WriteStockListFileInGroups(new (string Title, Func<SalesBinderInventoryItem, bool> Filter)[]
-            {
-                ("Adult - Non Fiction",x=>string.Compare(x.KidsOrAdult?.Trim(),"Adult - Non Fiction",StringComparison.OrdinalIgnoreCase)==0),
-                ("Adult Fiction",x=>string.Compare(x.KidsOrAdult?.Trim(),"Adult Fiction",StringComparison.OrdinalIgnoreCase)==0),
-                ("Children's",x=>string.Compare(x.KidsOrAdult?.Trim(),"Children's",StringComparison.OrdinalIgnoreCase)==0),
-                ("Food & Drink",x=>string.Compare(x.KidsOrAdult?.Trim(),"Food & Drink",StringComparison.OrdinalIgnoreCase)==0),
-                ("Clearance",x=>x.IsClearance()),
-                ("1000+", x => x.Quantity >= 1000)
-            },fileNameForTabs);
-            "done.".ConsoleWriteLine();
         }
         
         public static void WriteStockListFileInGroups(
