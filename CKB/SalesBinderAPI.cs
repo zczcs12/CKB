@@ -606,6 +606,9 @@ namespace CKB
         public string ImageURLLarge { get; set; }
     }
 
+    /// <summary>
+    /// These are the keys for the fields within 'Static\custom_fields.json'
+    /// </summary>
     public static class InventoryCustomFields
     {
         public const string ProductType = "Product Type";
@@ -623,7 +626,7 @@ namespace CKB
         public const string CommodityCode = "Commodity Code";
         public const string MaterialComposition = "Material Composition";
         public const string Clearance = "Clearance";
-        public const string BinLocation = "Bin Location";
+        public const string BinLocation = "Bin location";
         public const string Rating = "Rating";
         public const string SalesRestrictions = "Sales Restrictions";
     }
@@ -654,7 +657,10 @@ namespace CKB
                 itemToken.Add("item_details",arr);
             }
 
-            var customFieldId = SalesBinderAPI.CustomFieldNameToId[customFieldname_];
+            if (!SalesBinderAPI.CustomFieldNameToId.TryGetValue(customFieldname_, out var customFieldId))
+            {
+                throw new Exception($"Cannot find field id for customFieldName {customFieldname_}");
+            }
 
             var set = false;
             
