@@ -480,10 +480,16 @@ namespace CKB
                         "No changes found.".ConsoleWriteLine();
                     else if (Args.Force)
                     {
+                        var total = toUpdate.Length;
+                        $"There are {total} records that will be updated.  ".ConsoleWrite();
                         Console.Write("Enter 'yes' to make the changes: ");
                         var entered = Console.ReadLine();
                         if (string.Compare("yes", entered.Trim(), StringComparison.OrdinalIgnoreCase) == 0)
-                            toUpdate.ForEach(r => r.DetectChanges(currentInventory, Args.UpdateQuantities, true));
+                            toUpdate.ForEach((r,i) =>
+                            {
+                                $"{i+1}/{total}: ".ConsoleWrite();
+                                r.DetectChanges(currentInventory, Args.UpdateQuantities, true);
+                            });
                         else
                             "Changed aborted.".ConsoleWriteLine();
                     }

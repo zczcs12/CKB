@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using CsvHelper.Configuration.Attributes;
@@ -690,20 +691,21 @@ namespace CKB
 
         private static void setBinLocation(JObject root, string value_)
         {
-            if (!SalesBinderAPI.UnitsOfMeasureByName.TryGetValue(value_, out var unitOfMeasure))
+            if (!SalesBinderAPI.UnitsOfMeasureByName.TryGetValue(value_, out var unitOfMeasure)
+                && !string.IsNullOrEmpty(value_))
             {
-                $"Error - can't find a unit of measure with given name {value_}".ConsoleWriteLine();
+                $"Error - can't find a unit of measure with given name '{value_}'".ConsoleWriteLine();
                 return;
             }
-            
-            setItemDetail(root,InventoryCustomFields.BinLocation,value_);
 
-            if(root["item"].TryExtractToken("unit_of_measure",out var uom))
-            {
-                uom["id"] = unitOfMeasure.Id;
-                uom["full_name"] = unitOfMeasure.LongName;
-                uom["short_name"] = unitOfMeasure.ShortName;
-            }
+            setItemDetail(root, InventoryCustomFields.BinLocation, value_);
+
+            if (unitOfMeasure != null)
+                root["item"]["unit_of_measure"] = new JObject(
+                    new JProperty("id", unitOfMeasure?.Id),
+                    new JProperty("full_name", unitOfMeasure?.LongName),
+                    new JProperty("short_name", unitOfMeasure?.ShortName)
+                );
         }
 
 
