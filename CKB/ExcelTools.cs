@@ -65,17 +65,17 @@ namespace CKB
             }
         }
 
-        public static void AddImage(this WorksheetPart worksheetPart,
+        public static bool AddImage(this WorksheetPart worksheetPart,
                                     string imageFileName, string imgDesc,
                                     int colNumber, int rowNumber, Func<Bitmap, Bitmap> processor_ = null)
         {
             using (var imageStream = new FileStream(imageFileName, FileMode.Open))
             {
-                AddImage(worksheetPart, imageStream, imgDesc, colNumber, rowNumber, processor_);
+                return AddImage(worksheetPart, imageStream, imgDesc, colNumber, rowNumber, processor_);
             }
         }
 
-        public static void AddImage(bool createFile, string excelFile, string sheetName,
+        public static bool AddImage(bool createFile, string excelFile, string sheetName,
                                     Stream imageStream, string imgDesc,
                                     int colNumber, int rowNumber)
         {
@@ -116,14 +116,16 @@ namespace CKB
                 worksheetPart = GetWorksheetPartByName(spreadsheetDocument, sheetName);
             }
 
-            AddImage(worksheetPart, imageStream, imgDesc, colNumber, rowNumber);
+            var result = AddImage(worksheetPart, imageStream, imgDesc, colNumber, rowNumber);
 
             worksheetPart.Worksheet.Save();
 
             spreadsheetDocument.Close();
+
+            return result;
         }
 
-        public static void AddImage(this WorksheetPart worksheetPart,
+        public static bool AddImage(this WorksheetPart worksheetPart,
                                     Stream imageStream, string imgDesc,
                                     int colNumber, int rowNumber, Func<Bitmap, Bitmap> processor_ = null)
         {
@@ -149,7 +151,16 @@ namespace CKB
 
             var worksheetDrawing = drawingsPart.WorksheetDrawing;
 
-            Bitmap bm = new Bitmap(imageMemStream);
+            Bitmap bm;
+            try
+            {
+                bm = new Bitmap(imageMemStream);
+            }
+            catch
+            {
+                return false;
+            }
+
             if (processor_ != null) bm = processor_(bm);
             var imagePart = drawingsPart.AddImagePart(GetImagePartTypeByBitmap(bm));
             imagePart.FeedData(imageStream);
@@ -197,6 +208,7 @@ namespace CKB
             );
 
             worksheetDrawing.Append(oneCellAnchor);
+            return true;
         }
 
         public static Cell InsertCellInWorksheet(this WorksheetPart worksheetPart, string columnName, uint rowIndex)
